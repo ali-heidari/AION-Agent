@@ -21,3 +21,5 @@ target
 #.idea/
 
 Cargo.lock
+model*.json
+*.csv

@@ -41,17 +41,26 @@ impl SyntheticState {
         use rand::Rng;
         let mut rng = rand::thread_rng();
 
-let mut range = match lowest_state {
-    // 0 => (0.7,1.0),
-    // 1 => (0.35,0.7),
-    // 2 => (0.05,0.35),
-    _ => (0.01,1.0)
+let mut range = (0.01,1.0); 
+
+if self.count>200 {
+    
+   let state= match lowest_state {
+    0 => ((0.65,1.0), 0.65),
+    1 => ((0.35,0.7), 0.35),
+    2 => ((0.01,0.35), 0.1),
+    _ => ((0.01,1.0), 0.0)
 
 };
+range=state.0;
+    self.cpu=state.1;
+    self.mem=state.1;
+self.count=0;
+}
 
 // range=if rng.gen_bool(0.5){(0.05,1.0)} else {range};
 // self.state=lowest_state;
-// self.count+=1;
+self.count+=1;
         //  println!("lowest_state: {}, range: {:?}",lowest_state,range);
 
 
