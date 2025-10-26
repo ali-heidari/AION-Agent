@@ -1,0 +1,7 @@
+[package]
+name = "aion-agent"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+aion-rlt = { git = "https://github.com/ali-heidari/aion-rlt" }
