@@ -1,26 +1,18 @@
+mod configurations;
 mod mock;
 mod reward;
 
 use aion_math::math::Math;
-use color_eyre::Result;
-use crossterm::event::{self, Event};
-use ratatui::{DefaultTerminal, Frame};
+use aion_rlt::node::{Node, RunningMode};
+use anyhow::Result;
 use std::ops::Div;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::u32;
 
+use crate::configurations::load_config;
 use crate::mock::SyntheticState;
-use crate::node::{Node, RunningMode};
 use crate::reward::{compute_reward, compute_reward_with_success};
-
-fn use_tui() -> Result<(), color_eyre::Report> {
-    color_eyre::install()?;
-    let terminal = ratatui::init();
-    let result = run(terminal);
-    ratatui::restore();
-    result
-}
 
 fn get_features(state: &mut SyntheticState, lowest_state: u32) -> Vec<f32> {
     let features = state.next(mock::Mode::Generative, 0.0, 0.0, lowest_state);
@@ -93,25 +85,15 @@ async fn main() -> Result<()> {
             break;
         }
     }
+    return  Ok(());
 
-    // Node::start(
-    //     move |lowest_state| get_features(&mut cloned_state.lock().unwrap(), lowest_state),
-    //     RunningMode::Training,
-    // )
-    // .await;
+    aion_rlt::initialize(load_config().unwrap());
+    Node::start(
+        move |lowest_state| get_features(&mut cloned_state.lock().unwrap(), lowest_state),
+        RunningMode::Training,
+        |x, y| compute_reward_with_success(x, y as u8),
+    )
+    .await;
 
     Ok(())
-}
-
-fn run(mut terminal: DefaultTerminal) -> Result<()> {
-    loop {
-        terminal.draw(render)?;
-        if matches!(event::read()?, Event::Key(_)) {
-            break Result::Ok(());
-        }
-    }
-}
-
-fn render(frame: &mut Frame) {
-    frame.render_widget("hello world", frame.area());
 }
