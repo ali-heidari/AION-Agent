@@ -48,13 +48,14 @@ if self.count>200 {
    let state= match lowest_state {
     0 => ((0.65,1.0), 0.65),
     1 => ((0.35,0.7), 0.35),
-    2 => ((0.01,0.35), 0.1),
+    2 => ((0.01,0.35), 0.01),
     _ => ((0.01,1.0), 0.0)
 
 };
 range=state.0;
+if(state.1>0.0){
     self.cpu=state.1;
-    self.mem=state.1;
+    self.mem=state.1;}
 self.count=0;
 }
 
