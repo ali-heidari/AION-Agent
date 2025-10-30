@@ -1,9 +1,16 @@
+use anyhow::Result;
 use core::f32;
+use csv::{Reader, StringRecord, StringRecordIter, StringRecordsIter};
+use std::fs::File;
+use std::io;
+use std::ops::Div;
+use std::path::Path;
 use sysinfo::System;
 
 const MEMORY_THRESHOLD: f32 = 0.8;
 
-pub enum Mode {
+#[derive(Clone, Debug, PartialEq)]
+pub enum DatasetMode {
     SystemMetrics,
     Inputs,
     Generative,
@@ -19,10 +26,12 @@ pub struct SyntheticState {
     pub latency: f32,
     pub direction: f32, // +1 for ramp-up, -1 for ramp-down
     pub count: u32,
+    records: Vec<Vec<f32>>,
+    mode: DatasetMode,
 }
 
 impl SyntheticState {
-    pub fn new() -> Self {
+    pub fn new(mode: DatasetMode) -> Self {
         Self {
             cpu: 0.1,
             mem: 0.1,
@@ -32,7 +41,41 @@ impl SyntheticState {
             latency: 0.1,
             direction: 1.0,
             count: 1,
+            records: vec![],
+            mode: mode,
         }
+    }
+
+    pub fn from_csv_dataset(&mut self) -> Result<()> {
+        let file_path = Path::new("vmCloud_data.csv");
+        let mut rdr = csv::Reader::from_path(file_path)?;
+        let max = 1.0; //if rng.gen_bool(0.04) {1.0} else {0.4};
+        for result in rdr.records() {
+            let record = result?;
+            if record.get(2).unwrap().is_empty() || record.get(3).unwrap().is_empty() {
+                continue;
+            }
+            let max = 1.0; //if rng.gen_bool(0.04) {1.0} else {0.4};
+            let features = vec![
+                record
+                    .get(2)
+                    .unwrap()
+                    .parse::<f32>()
+                    .unwrap()
+                    .div(100.0)
+                    .clamp(0.05, max),
+                record
+                    .get(3)
+                    .unwrap()
+                    .parse::<f32>()
+                    .unwrap()
+                    .div(100.0)
+                    .clamp(0.05, max),
+            ];
+            self.records.push(features);
+        }
+        println!("Dataset has been loaded!");
+        Ok(())
     }
 
     fn generate_by_system_metrics(&mut self) -> Vec<f32> {
@@ -98,15 +141,15 @@ impl SyntheticState {
             self.count = 0;
         }
 
-        self.count += 1;
-
         if rng.gen_bool(0.5) {
             self.direction *= -1.0;
         }
 
-        self.cpu = cpu;
+        let record: Vec<f32> = self.records[self.count as usize].clone();
 
-        self.mem = mem;
+        self.cpu = record[0];
+
+        self.mem = record[1];
 
         self.swap = f32::max(0.0, self.mem + rng.gen_range(0.0..0.2) - MEMORY_THRESHOLD);
 
@@ -133,6 +176,8 @@ impl SyntheticState {
         {
             self.direction *= -1.0;
         }
+
+        self.count += 1;
 
         vec![
             self.cpu,
@@ -211,11 +256,11 @@ impl SyntheticState {
         ]
     }
 
-    pub fn next(&mut self, mode: Mode, cpu: f32, mem: f32, lowest_state: u32) -> Vec<f32> {
-        match mode {
-            Mode::Generative => self.generate_by_random(lowest_state),
-            Mode::Inputs => self.generate_by_inputs(cpu, mem, lowest_state),
-            Mode::SystemMetrics => self.generate_by_system_metrics(),
+    pub fn next(&mut self, cpu: f32, mem: f32, lowest_state: u32) -> Vec<f32> {
+        match self.mode {
+            DatasetMode::Generative => self.generate_by_random(lowest_state),
+            DatasetMode::Inputs => self.generate_by_inputs(cpu, mem, lowest_state),
+            DatasetMode::SystemMetrics => self.generate_by_system_metrics(),
         }
     }
 }
