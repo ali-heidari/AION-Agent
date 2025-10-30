@@ -3,7 +3,7 @@ mod mock;
 mod reward;
 
 use aion_rlt::CONFIG;
-use aion_rlt::node::{Node};
+use aion_rlt::node::{Node, RunningMode};
 use anyhow::Result;
 use std::ops::Div;
 use std::path::Path;
@@ -11,11 +11,17 @@ use std::sync::{Arc, Mutex};
 use std::u32;
 
 use crate::configurations::load_config;
-use crate::mock::SyntheticState;
-use crate::reward::{ compute_reward_with_success};
+use crate::mock::{Mode, SyntheticState};
+use crate::reward::compute_reward_with_success;
 
 fn get_features(state: &mut SyntheticState, lowest_state: u32) -> Vec<f32> {
-    let features = state.next(mock::Mode::SystemMetrics, 0.0, 0.0, lowest_state);
+    let mode = match CONFIG.get().unwrap().mode {
+        RunningMode::Infer => Mode::SystemMetrics,
+        RunningMode::Training => Mode::Generative,
+        RunningMode::TrainingWithInterval => Mode::Generative,
+        _ => Mode::Inputs,
+    };
+    let features = state.next(mock::Mode::Generative, 0.0, 0.0, lowest_state);
     features
 }
 
