@@ -21,7 +21,7 @@ fn get_features(state: &mut SyntheticState, lowest_state: u32) -> Vec<f32> {
         RunningMode::TrainingWithInterval => Mode::Generative,
         _ => Mode::Inputs,
     };
-    let features = state.next(mock::Mode::Generative, 0.0, 0.0, lowest_state);
+    let features = state.next(mode, 0.0, 0.0, lowest_state);
     features
 }
 
