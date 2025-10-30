@@ -3,64 +3,43 @@ mod mock;
 mod reward;
 
 use aion_rlt::CONFIG;
-use aion_rlt::node::{Node, RunningMode};
-use anyhow::Result;
-use std::ops::Div;
-use std::path::Path;
+use aion_rlt::node::Node;
+use anyhow::{Ok, Result};
+use std::env;
 use std::sync::{Arc, Mutex};
 use std::u32;
 
 use crate::configurations::load_config;
-use crate::mock::{Mode, SyntheticState};
+use crate::mock::{DatasetMode, SyntheticState};
 use crate::reward::compute_reward_with_success;
 
 fn get_features(state: &mut SyntheticState, lowest_state: u32) -> Vec<f32> {
-    let mode = match CONFIG.get().unwrap().mode {
-        RunningMode::Infer => Mode::SystemMetrics,
-        RunningMode::Training => Mode::Generative,
-        RunningMode::TrainingWithInterval => Mode::Generative,
-        _ => Mode::Inputs,
-    };
-    let features = state.next(mode, 0.0, 0.0, lowest_state);
+    let features = state.next(0.0, 0.0, lowest_state);
     features
-}
-
-fn from_csv_dataset(state: &mut SyntheticState) -> Result<()> {
-    let file_path = Path::new("vmCloud_data.csv");
-    let mut rdr = csv::Reader::from_path(file_path)?;
-    let max = 1.0; //if rng.gen_bool(0.04) {1.0} else {0.4};
-    for result in rdr.records() {
-        let record = result?;
-        if record.get(2).unwrap().is_empty() || record.get(3).unwrap().is_empty() {
-            continue;
-        }
-        let max = 1.0; //if rng.gen_bool(0.04) {1.0} else {0.4};
-        let features = state.next(
-            mock::Mode::Inputs,
-            record
-                .get(2)
-                .unwrap()
-                .parse::<f32>()
-                .unwrap()
-                .div(100.0)
-                .clamp(0.05, max),
-            record
-                .get(3)
-                .unwrap()
-                .parse::<f32>()
-                .unwrap()
-                .div(100.0)
-                .clamp(0.05, max),
-            100,
-        );
-    }
-    Ok(())
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
-    let state = Arc::new(Mutex::new(SyntheticState::new()));
+
+    let args: Vec<String> = env::args().collect();
+    if args.len() < 2 {
+        return Ok(());
+    }
+    let mode = &args[1];
+
+    let mode = match mode.as_str() {
+        "metrics" => DatasetMode::SystemMetrics,
+        "generative" => DatasetMode::Generative,
+        "csv" => DatasetMode::Inputs,
+        _ => DatasetMode::Generative,
+    };
+
+    let mut dataset = SyntheticState::new(mode.clone());
+    if mode == DatasetMode::Inputs {
+        dataset.from_csv_dataset().ok();
+    }
+    let state = Arc::new(Mutex::new(dataset));
     let cloned_state = Arc::clone(&state);
 
     aion_rlt::initialize(load_config().unwrap());
