@@ -6,7 +6,7 @@ use std::io;
 use std::ops::Div;
 use std::path::Path;
 use sysinfo::System;
-
+use csv::Writer;
 const MEMORY_THRESHOLD: f32 = 0.8;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -40,7 +40,7 @@ impl SyntheticState {
             throughput: 0.95,
             latency: 0.1,
             direction: 1.0,
-            count: 1,
+            count: 0,
             records: vec![],
             mode: mode,
         }
@@ -109,6 +109,32 @@ impl SyntheticState {
             1.0,
             (self.latency / 1.0) * (1.0 + delta * f32::max(self.cpu, self.mem)),
         );
+
+
+
+    let file = std::fs::OpenOptions::new()
+        .write(true)
+        .append(true)
+        .create(true)
+        .open("output.csv").unwrap();
+    let mut wtr =csv::WriterBuilder::new().from_writer(file);
+
+if self.count == 1 {
+    let record = vec!["cpu".to_string(), "memory".to_string(), "swap".to_string(), "disk".to_string(), "throughput".to_string(), "latency".to_string()];
+        wtr.write_record(&record);
+}
+
+  let record=vec![
+            self.cpu.to_string(),
+            self.mem.to_string(),
+            self.swap.to_string(),
+            self.disk.to_string(),
+            self.throughput.to_string(),
+            self.latency.to_string(),
+        ];
+
+        wtr.write_record(&record);
+        wtr.flush();
 
         vec![
             self.cpu,
