@@ -4,9 +4,14 @@ mod reward;
 
 use aion_rlt::CONFIG;
 use aion_rlt::node::Node;
+use aion_transporter;
 use anyhow::{Ok, Result};
 use std::env;
+use std::net::IpAddr;
+use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
+use std::thread::sleep;
+use std::time::Duration;
 use std::u32;
 
 use crate::configurations::load_config;
@@ -18,9 +23,34 @@ fn get_features(state: &mut SyntheticState, lowest_state: u32) -> Vec<f32> {
     features
 }
 
+async fn on_data_received(address: SocketAddr, data: &[u8]) {
+    println!("{:?}: {:?}", address.ip(), String::from_utf8(data.to_vec()));
+    aion_transporter::multicast::send("we got message!").await;
+    println!("respond")
+}
+
+async fn listen_to_agents() {
+    tokio::spawn(async {
+        aion_transporter::multicast::listen(on_data_received).await;
+    });
+}
+
+async fn send_hello() {
+    aion_transporter::multicast::send("hii").await;
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
+
+    send_hello().await;
+    listen_to_agents().await;
+
+    loop {
+        sleep(Duration::from_secs(2));
+    }
+
+    return Ok(());
 
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
