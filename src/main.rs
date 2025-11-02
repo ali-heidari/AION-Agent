@@ -5,6 +5,8 @@ mod reward;
 use aion_rlt::CONFIG;
 use aion_rlt::node::Node;
 use aion_transporter::multicast;
+use aion_transporter::quic::client;
+use aion_transporter::quic::server::start_quic;
 use anyhow::{Ok, Result};
 use std::collections::HashMap;
 use std::env;
@@ -12,8 +14,6 @@ use std::net::SocketAddr;
 use std::sync::LazyLock;
 use std::sync::RwLock;
 use std::sync::{Arc, Mutex};
-use std::thread::sleep;
-use std::time::Duration;
 
 use crate::configurations::load_config;
 use crate::mock::{DatasetMode, SyntheticState};
@@ -69,17 +69,24 @@ async fn on_data_received(address: SocketAddr, data: &[u8]) {
             cache.insert(address.ip().to_string(), Agent::parse(agent));
         }
     }
-
+    let mut all_ips = "".to_owned();
     {
         let cache = CACHE.read().unwrap();
-        let all_ips = cache
+        all_ips = cache
             .iter()
             .map(|entry| entry.1.stringify())
             .collect::<Vec<String>>()
             .join("|");
-
-        println!("We know IP(s): {}\n***********", all_ips)
     }
+
+    if !all_ips.is_empty()
+        && let Err(e) =
+            client::send(address.ip().to_string().as_str(), 4433, all_ips.as_bytes()).await
+    {
+        println!("Error while sending IP(s) to new agent: {:?}", e);
+    }
+
+    println!("We know IP(s): {}\n***********", all_ips)
 }
 
 async fn listen_to_agents() {
@@ -103,14 +110,16 @@ async fn send_hello() {
 async fn main() -> Result<()> {
     env_logger::init();
 
-    println!("running");
-
+    println!("Broadcasting hello!");
     send_hello().await;
+    println!("Listening to multicast packets!");
     listen_to_agents().await;
-
-    loop {
-        sleep(Duration::from_secs(2));
+    println!("Running quic server!");
+    if let Err(error) = start_quic(4433).await {
+        println!("Error while starting quic server: {}", error);
     }
+
+    println!("done");
 
     return Ok(());
 
