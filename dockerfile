@@ -15,6 +15,8 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/target/release/aion-agent /usr/local/bin/aion-agent
 COPY --from=builder /app/certificates /certificates
+COPY model-128.json ./
+COPY config.toml ./
 ENV CERT_PATH="/certificates/cert.pem" KEY_PATH="/certificates/key.pem"
 
 ENTRYPOINT ["aion-agent"]
