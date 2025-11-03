@@ -81,15 +81,15 @@ pub async fn represent(action: u8) {
         let cache = CACHE.read().unwrap();
         all_ips = cache
             .iter()
-            .map(|entry| entry.1.identifier.to_owned())
+            .map(|entry| entry.1.stringify())
             .collect::<Vec<String>>();
     }
-
+    
     let message = action.to_string() + "|" + all_ips.join("|").as_str();
     if !all_ips.is_empty() {
-        for ip in all_ips {
-            println!("represent to: {}", ip.as_str());
-            if let Err(e) = client::send(ip.as_str(), 4433, message.as_bytes()).await {
+        for ip in all_ips.iter().map(|ip| *ip.split(",").collect::<Vec<&str>>().get(0).unwrap()) {
+            println!("represent to: {}", ip);
+            if let Err(e) = client::send(ip, 4433, message.as_bytes()).await {
                 println!("Error while sending IP(s) to agents: {:?}", e);
             }
         }
@@ -146,8 +146,8 @@ fn on_message_received(ip: String, message: String) {
     let mut ips: Vec<&str> = message.split("|").collect();
     {
         let mut cache = CACHE.write().unwrap();
-        let agent: &mut Agent = cache.get_mut(&ip).unwrap();
-        agent.state = ips[0].parse().unwrap();
+
+        cache.insert(ip.clone(), Agent::new(&ip, ips[0].parse().unwrap()));
         ips.remove(0);
         for ip in ips {
             let segs: Vec<&str> = ip.split(",").collect();
