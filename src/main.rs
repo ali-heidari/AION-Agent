@@ -69,7 +69,7 @@ async fn on_data_received(address: SocketAddr, data: &[u8]) {
             cache.insert(address.ip().to_string(), Agent::parse(agent));
         }
     }
-    let mut all_ips = "".to_owned();
+    let all_ips :String;
     {
         let cache = CACHE.read().unwrap();
         all_ips = cache
@@ -109,6 +109,8 @@ async fn send_hello() {
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
+
+    aion_transporter::quic::init();
 
     println!("Broadcasting hello!");
     send_hello().await;
