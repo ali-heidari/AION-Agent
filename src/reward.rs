@@ -20,7 +20,9 @@ pub fn compute_reward(features: &Vec<f32>) -> f32 {
 }
 
 pub fn compute_reward_with_success(features: &Vec<f32>, action: u8) -> (f32, bool) {
-    let raw_reward = compute_reward(&features);
+    println!("Environment metrics: {:?}",features);
+    println!("Decision made: {}",action);
+    let raw_reward = compute_reward(features);
 
     let scaled_reward = ((raw_reward + 1.0) / (2.0)).clamp(0.0, 1.0);
 
