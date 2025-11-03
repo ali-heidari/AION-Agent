@@ -71,24 +71,26 @@ async fn on_data_received(address: SocketAddr, data: &[u8]) {
             cache.insert(address.ip().to_string(), Agent::parse(agent));
         }
     }
-    let all_ips: String;
+}
+
+pub async fn represent(action: u8) {
+    let all_ips: Vec<String>;
     {
         let cache = CACHE.read().unwrap();
         all_ips = cache
             .iter()
             .map(|entry| entry.1.stringify())
-            .collect::<Vec<String>>()
-            .join("|");
+            .collect::<Vec<String>>();
     }
 
-    if !all_ips.is_empty()
-        && let Err(e) =
-            client::send(address.ip().to_string().as_str(), 4433, all_ips.as_bytes()).await
-    {
-        println!("Error while sending IP(s) to new agent: {:?}", e);
+    let message = action.to_string() + "|" + all_ips.join("|").as_str();
+    if !all_ips.is_empty() {
+        for ip in all_ips {
+            if let Err(e) = client::send(ip.as_str(), 4433, message.as_bytes()).await {
+                println!("Error while sending IP(s) to agents: {:?}", e);
+            }
+        }
     }
-
-    println!("We know IP(s): {}\n***********", all_ips)
 }
 
 async fn listen_to_agents() {
@@ -108,7 +110,7 @@ async fn send_hello() {
     }
 }
 
-fn start_ai(){
+fn start_ai() {
     tokio::spawn(async {
         if let Err(e) = start_predicting().await {
             println!("Error while starting AI: {:?}", e);
