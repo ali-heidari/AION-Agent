@@ -14,6 +14,8 @@ use std::net::SocketAddr;
 use std::sync::LazyLock;
 use std::sync::RwLock;
 use std::sync::{Arc, Mutex};
+use std::thread::sleep;
+use std::time::Duration;
 
 use crate::configurations::load_config;
 use crate::mock::{DatasetMode, SyntheticState};
@@ -69,7 +71,7 @@ async fn on_data_received(address: SocketAddr, data: &[u8]) {
             cache.insert(address.ip().to_string(), Agent::parse(agent));
         }
     }
-    let all_ips :String;
+    let all_ips: String;
     {
         let cache = CACHE.read().unwrap();
         all_ips = cache
@@ -106,6 +108,33 @@ async fn send_hello() {
     }
 }
 
+fn start_ai(){
+    tokio::spawn(async {
+        if let Err(e) = start_predicting().await {
+            println!("Error while starting AI: {:?}", e);
+        };
+        println!("Starting AI thread closed");
+    });
+}
+
+async fn start_predicting() -> Result<()> {
+    let dataset = SyntheticState::new(DatasetMode::SystemMetrics);
+
+    let state = Arc::new(Mutex::new(dataset));
+    let cloned_state = Arc::clone(&state);
+
+    aion_rlt::initialize(load_config().unwrap());
+
+    Node::start(
+        move |lowest_state| get_features(&mut cloned_state.lock().unwrap(), lowest_state),
+        |x, y| compute_reward_with_success(x, y as u8),
+        CONFIG.get().unwrap().mode,
+    )
+    .await;
+
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
@@ -116,9 +145,16 @@ async fn main() -> Result<()> {
     send_hello().await;
     println!("Listening to multicast packets!");
     listen_to_agents().await;
+    println!("Start AI");
+    start_ai();
     println!("Running quic server!");
     if let Err(error) = start_quic(4433).await {
         println!("Error while starting quic server: {}", error);
+    }
+
+    loop {
+        println!("looping");
+        sleep(Duration::from_secs(2));
     }
 
     println!("done");
@@ -137,22 +173,6 @@ async fn main() -> Result<()> {
         "csv" => DatasetMode::Inputs,
         _ => DatasetMode::Generative,
     };
-
-    let mut dataset = SyntheticState::new(mode.clone());
-    if mode == DatasetMode::Inputs {
-        dataset.from_csv_dataset().ok();
-    }
-    let state = Arc::new(Mutex::new(dataset));
-    let cloned_state = Arc::clone(&state);
-
-    aion_rlt::initialize(load_config().unwrap());
-
-    Node::start(
-        move |lowest_state| get_features(&mut cloned_state.lock().unwrap(), lowest_state),
-        |x, y| compute_reward_with_success(x, y as u8),
-        CONFIG.get().unwrap().mode,
-    )
-    .await;
 
     Ok(())
 }
