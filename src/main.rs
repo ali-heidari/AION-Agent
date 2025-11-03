@@ -71,6 +71,8 @@ async fn on_data_received(address: SocketAddr, data: &[u8]) {
             cache.insert(address.ip().to_string(), Agent::parse(agent));
         }
     }
+
+    represent(2).await;
 }
 
 pub async fn represent(action: u8) {
@@ -79,13 +81,14 @@ pub async fn represent(action: u8) {
         let cache = CACHE.read().unwrap();
         all_ips = cache
             .iter()
-            .map(|entry| entry.1.stringify())
+            .map(|entry| entry.1.identifier.to_owned())
             .collect::<Vec<String>>();
     }
 
     let message = action.to_string() + "|" + all_ips.join("|").as_str();
     if !all_ips.is_empty() {
         for ip in all_ips {
+            println!("represent to: {}", ip.as_str());
             if let Err(e) = client::send(ip.as_str(), 4433, message.as_bytes()).await {
                 println!("Error while sending IP(s) to agents: {:?}", e);
             }
@@ -137,6 +140,22 @@ async fn start_predicting() -> Result<()> {
     Ok(())
 }
 
+fn on_message_received(ip: String, message: String) {
+    println!("Quic message received-> [{}]: {}", ip, message);
+
+    let mut ips: Vec<&str> = message.split("|").collect();
+    {
+        let mut cache = CACHE.write().unwrap();
+        let agent: &mut Agent = cache.get_mut(&ip).unwrap();
+        agent.state = ips[0].parse().unwrap();
+        ips.remove(0);
+        for ip in ips {
+            let segs: Vec<&str> = ip.split(",").collect();
+            cache.insert(segs[0].to_string(), Agent::parse(ip));
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
@@ -150,7 +169,7 @@ async fn main() -> Result<()> {
     println!("Start AI");
     start_ai();
     println!("Running quic server!");
-    if let Err(error) = start_quic(4433).await {
+    if let Err(error) = start_quic(4433, on_message_received).await {
         println!("Error while starting quic server: {}", error);
     }
 
