@@ -9,7 +9,6 @@ use aion_transporter::quic::client;
 use aion_transporter::quic::server::start_quic;
 use anyhow::{Ok, Result};
 use std::collections::HashMap;
-use std::env;
 use std::net::SocketAddr;
 use std::sync::LazyLock;
 use std::sync::RwLock;
@@ -87,7 +86,7 @@ pub async fn represent(action: u8) {
     
     let message = action.to_string() + "|" + all_ips.join("|").as_str();
     if !all_ips.is_empty() {
-        for ip in all_ips.iter().map(|ip| *ip.split(",").collect::<Vec<&str>>().get(0).unwrap()) {
+        for ip in all_ips.iter().map(|ip| *ip.split(",").collect::<Vec<&str>>().first().unwrap()) {
             println!("represent to: {}", ip);
             if let Err(e) = client::send(ip, 4433, message.as_bytes()).await {
                 println!("Error while sending IP(s) to agents: {:?}", e);
@@ -151,6 +150,9 @@ fn on_message_received(ip: String, message: String) {
         ips.remove(0);
         for ip in ips {
             let segs: Vec<&str> = ip.split(",").collect();
+            if local_ip().unwrap().to_string().eq(segs[0]){
+                continue;
+            }
             cache.insert(segs[0].to_string(), Agent::parse(ip));
         }
     }
@@ -177,23 +179,4 @@ async fn main() -> Result<()> {
         println!("looping");
         sleep(Duration::from_secs(2));
     }
-
-    println!("done");
-
-    return Ok(());
-
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
-        return Ok(());
-    }
-    let mode = &args[1];
-
-    let mode = match mode.as_str() {
-        "metrics" => DatasetMode::SystemMetrics,
-        "generative" => DatasetMode::Generative,
-        "csv" => DatasetMode::Inputs,
-        _ => DatasetMode::Generative,
-    };
-
-    Ok(())
 }
