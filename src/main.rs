@@ -43,7 +43,13 @@ impl Agent {
         let identifier: &str = segments[0];
         let state: u8 = segments[1].parse().unwrap();
 
-        Agent::new(identifier, state)
+        let agent = Agent::new(identifier, state);
+        {
+            let mut cache = CACHE.write().unwrap();
+            cache.insert(identifier.to_owned(), agent.clone());
+        }
+
+        agent
     }
 
     fn stringify(&self) -> String {
@@ -55,6 +61,14 @@ fn get_features(state: &mut SyntheticState, lowest_state: u32) -> Vec<f32> {
     state.next(0.0, 0.0, lowest_state)
 }
 
+fn add_agents(details: &str, separator: char) {
+    let agents = details.split(separator);
+
+    for agent in agents {
+        Agent::parse(agent);
+    }
+}
+
 async fn on_data_received(address: SocketAddr, data: &[u8]) {
     let message = String::from_utf8(data.to_vec()).unwrap();
     println!("message came from {} says: {:?}", address.ip(), message);
@@ -62,15 +76,7 @@ async fn on_data_received(address: SocketAddr, data: &[u8]) {
         return;
     }
 
-    {
-        let agents = message.split("|");
-        let mut cache = CACHE.write().unwrap();
-
-        for agent in agents {
-            println!("{}", agent);
-            cache.insert(address.ip().to_string(), Agent::parse(agent));
-        }
-    }
+    add_agents(&message, '|');
 
     represent(2).await;
 }
@@ -146,20 +152,9 @@ async fn start_predicting() -> Result<()> {
 fn on_message_received(ip: String, message: String) {
     println!("Quic message received-> [{}]: {}", ip, message);
 
-    let mut ips: Vec<&str> = message.split("|").collect();
-    {
-        let mut cache = CACHE.write().unwrap();
+    let details = ip + "," + &message;
 
-        cache.insert(ip.clone(), Agent::new(&ip, ips[0].parse().unwrap()));
-        ips.remove(0);
-        for ip in ips {
-            let segs: Vec<&str> = ip.split(",").collect();
-            if local_ip().unwrap().to_string().eq(segs[0]) {
-                continue;
-            }
-            cache.insert(segs[0].to_string(), Agent::parse(ip));
-        }
-    }
+    add_agents(details.as_str(), '|');
 }
 
 #[tokio::main]
@@ -171,10 +166,7 @@ async fn main() -> Result<()> {
         let option = &args[1];
         if option.eq("neighbor") {
             let neighbor = &args[2];
-            {
-                let mut cache = CACHE.write().unwrap();
-                cache.insert(neighbor.clone(), Agent::new(&neighbor, 2));
-            }
+            add_agents((neighbor.to_string() + ",2").as_str(), '|');
         }
     }
 
