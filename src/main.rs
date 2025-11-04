@@ -99,6 +99,10 @@ pub async fn represent(action: u8) {
         {
             println!("represent to: {}", ip);
             if let Err(e) = client::send(ip, 4433, message.as_bytes()).await {
+                {
+                    let mut cache = CACHE.write().unwrap();
+                    cache.remove(ip);
+                }
                 println!("Error while sending IP(s) to agents: {:?}", e);
             }
         }
