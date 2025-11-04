@@ -97,6 +97,9 @@ pub async fn represent(action: u8) {
             .iter()
             .map(|ip| *ip.split(",").collect::<Vec<&str>>().first().unwrap())
         {
+            if ip.eq(local_ip().unwrap().to_string().as_str()) {
+                continue;
+            }
             println!("represent to: {}", ip);
             if let Err(e) = client::send(ip, 4433, message.as_bytes()).await {
                 {
@@ -104,6 +107,7 @@ pub async fn represent(action: u8) {
                     cache.remove(ip);
                 }
                 println!("Error while sending IP(s) to agents: {:?}", e);
+                println!("Removing agent {}", ip);
             }
         }
     }
