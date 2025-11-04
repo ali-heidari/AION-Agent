@@ -9,6 +9,7 @@ use aion_transporter::quic::client;
 use aion_transporter::quic::server::start_quic;
 use anyhow::{Ok, Result};
 use std::collections::HashMap;
+use std::env;
 use std::net::SocketAddr;
 use std::sync::LazyLock;
 use std::sync::RwLock;
@@ -83,10 +84,13 @@ pub async fn represent(action: u8) {
             .map(|entry| entry.1.stringify())
             .collect::<Vec<String>>();
     }
-    
+
     let message = action.to_string() + "|" + all_ips.join("|").as_str();
     if !all_ips.is_empty() {
-        for ip in all_ips.iter().map(|ip| *ip.split(",").collect::<Vec<&str>>().first().unwrap()) {
+        for ip in all_ips
+            .iter()
+            .map(|ip| *ip.split(",").collect::<Vec<&str>>().first().unwrap())
+        {
             println!("represent to: {}", ip);
             if let Err(e) = client::send(ip, 4433, message.as_bytes()).await {
                 println!("Error while sending IP(s) to agents: {:?}", e);
@@ -150,7 +154,7 @@ fn on_message_received(ip: String, message: String) {
         ips.remove(0);
         for ip in ips {
             let segs: Vec<&str> = ip.split(",").collect();
-            if local_ip().unwrap().to_string().eq(segs[0]){
+            if local_ip().unwrap().to_string().eq(segs[0]) {
                 continue;
             }
             cache.insert(segs[0].to_string(), Agent::parse(ip));
@@ -161,6 +165,18 @@ fn on_message_received(ip: String, message: String) {
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
+
+    let args: Vec<String> = env::args().collect();
+    if args.len() > 2 {
+        let option = &args[1];
+        if option.eq("neighbor") {
+            let neighbor = &args[2];
+            {
+                let mut cache = CACHE.write().unwrap();
+                cache.insert(neighbor.clone(), Agent::new(&neighbor, 2));
+            }
+        }
+    }
 
     aion_transporter::quic::init();
 
