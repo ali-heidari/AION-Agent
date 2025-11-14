@@ -7,6 +7,7 @@ use aion_rlt::node::Node;
 use aion_transporter::multicast;
 use aion_transporter::quic::client;
 use aion_transporter::quic::server::start_quic;
+use anyhow::Context;
 use anyhow::{Ok, Result};
 use std::collections::HashMap;
 use std::env;
@@ -165,6 +166,66 @@ fn on_message_received(ip: String, message: String) {
     add_agents(details.as_str(), '|');
 }
 
+async fn load_ebf() -> core::result::Result<(), anyhow::Error> {
+    let mut bpf = aya::Ebpf::load(aya::include_bytes_aligned!("../libebpf.so"))
+        .context("Failed to load eBPF object")?;
+
+    let default_interface_output = std::process::Command::new("ip")
+        .args(["route", "show", "default"])
+        .output()
+        .unwrap()
+        .stdout;
+
+    let text = String::from_utf8_lossy(&default_interface_output);
+    let interface_name = text.split(' ').collect::<Vec<&str>>()[4];
+
+    match aya_log::EbpfLogger::init(&mut bpf) {
+        Err(e) => {
+            // This can happen if you remove all log statements from your eBPF program.
+            println!("failed to initialize eBPF logger: {e}");
+        }
+        core::result::Result::Ok(logger) => {
+            let mut logger =
+                tokio::io::unix::AsyncFd::with_interest(logger, tokio::io::Interest::READABLE)?;
+            tokio::task::spawn(async move {
+                loop {
+                    let mut guard = logger.readable_mut().await.unwrap();
+                    guard.get_inner_mut().flush();
+                    guard.clear_ready();
+                }
+            });
+        }
+    }
+    let program = bpf
+        .program_mut("simple_xdp")
+        .ok_or_else(|| anyhow::anyhow!("Program 'simple_xdp' not found"))?;
+
+    let xdp: &mut aya::programs::Xdp = program.try_into().context("Failed to cast to Xdp")?;
+
+    xdp.load().context("Failed to load XDP program")?;
+
+    xdp.attach(interface_name, aya::programs::XdpFlags::default())
+        .context("Failed to attach XDP to default interface!")?;
+
+    println!(
+        "XDP ATTACHED to {}. Send ping → watch dmesg",
+        interface_name
+    );
+
+    let mut devmap: aya::maps::DevMap<_> = bpf.map_mut("DEVMAP").unwrap().try_into()?;
+    let ifindex = nix::net::if_::if_nametoindex(interface_name)?;
+    println!("Redirecting to ifindex {}", ifindex);
+    devmap.set(0, ifindex, None, 0)?;
+
+    let mut server_map: aya::maps::HashMap<_, u32, u32> =
+        aya::maps::HashMap::try_from(bpf.map_mut("SERVERMAP").unwrap())?;
+    server_map
+        .insert(0, u32::from_be_bytes([192, 168, 100, 134]), 0)
+        .expect("No server details defined!");
+
+    core::result::Result::Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
@@ -190,6 +251,8 @@ async fn main() -> Result<()> {
     if let Err(error) = start_quic(4433, on_message_received).await {
         println!("Error while starting quic server: {}", error);
     }
+    println!("Load ebpf - XDP Program");
+    load_ebf().await;
 
     loop {
         println!("looping");
