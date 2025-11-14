@@ -9,6 +9,7 @@ use aion_transporter::quic::client;
 use aion_transporter::quic::server::start_quic;
 use anyhow::Context;
 use anyhow::{Ok, Result};
+use tokio::task;
 use std::collections::HashMap;
 use std::env;
 use std::net::SocketAddr;
@@ -255,15 +256,16 @@ async fn main() -> Result<()> {
     listen_to_agents().await;
     println!("Start AI");
     start_ai();
+    println!("Running quic server!");
+    task::spawn(async {
+        if let Err(e) = start_quic(4433, on_message_received).await {
+            println!("Error while starting QUIC server: {:?}", e);
+        }
+    });
     println!("Load ebpf - XDP Program");
     load_ebf().await.expect("Can't load the ebpf!");
-    println!("Running quic server!");
-    if let Err(error) = start_quic(4433, on_message_received).await {
-        println!("Error while starting quic server: {}", error);
-    }
 
-    loop {
-        println!("looping");
-        sleep(Duration::from_secs(2));
-    }
+    tokio::signal::ctrl_c().await?;
+    println!("Exiting...");
+    Ok(())
 }
