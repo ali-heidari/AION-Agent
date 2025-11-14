@@ -167,8 +167,10 @@ fn on_message_received(ip: String, message: String) {
 }
 
 async fn load_ebf() -> core::result::Result<(), anyhow::Error> {
-    let mut bpf = aya::Ebpf::load(aya::include_bytes_aligned!("../libebpf.so"))
-        .context("Failed to load eBPF object")?;
+    let mut bpf = aya::Ebpf::load(aya::include_bytes_aligned!(
+        "../../AION-EBPF/target/bpfel-unknown-none/release/libebpf.so"
+    ))
+    .context("Failed to load eBPF object")?;
 
     let default_interface_output = std::process::Command::new("ip")
         .args(["route", "show", "default"])
@@ -223,6 +225,12 @@ async fn load_ebf() -> core::result::Result<(), anyhow::Error> {
         .insert(0, u32::from_be_bytes([192, 168, 100, 134]), 0)
         .expect("No server details defined!");
 
+    let mut blocklist: aya::maps::HashMap<_, u32, u32> =
+        aya::maps::HashMap::try_from(bpf.map_mut("BLOCKLIST").unwrap())?;
+    let block_addr: u32 = std::net::Ipv4Addr::new(192, 168, 100, 100).into();
+    blocklist.insert(block_addr, 0, 0)?;
+
+    tokio::signal::ctrl_c().await?;
     core::result::Result::Ok(())
 }
 
@@ -247,12 +255,12 @@ async fn main() -> Result<()> {
     listen_to_agents().await;
     println!("Start AI");
     start_ai();
+    println!("Load ebpf - XDP Program");
+    load_ebf().await.expect("Can't load the ebpf!");
     println!("Running quic server!");
     if let Err(error) = start_quic(4433, on_message_received).await {
         println!("Error while starting quic server: {}", error);
     }
-    println!("Load ebpf - XDP Program");
-    load_ebf().await;
 
     loop {
         println!("looping");
