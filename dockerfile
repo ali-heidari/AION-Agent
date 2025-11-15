@@ -28,6 +28,4 @@ ENV RUST_LOG=info
 
 EXPOSE 8123
 
-# ENTRYPOINT ["aion-agent"]
-ENTRYPOINT ["/tini", "--"]
-CMD [ "/bin/sh","-c","aion-agent && python3 m http.server 8123 -bind 0.0.0.0" ]
+ENTRYPOINT ["aion-agent"]
