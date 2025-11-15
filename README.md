@@ -9,6 +9,6 @@ CERT_PATH=./certificates/cert.pem KEY_PATH=./certificates/key.pem RUST_LOG=info 
 
 sudo docker build -t aion-agent .
 
-sudo docker run --rm -it --name aaa --cap-add=NET_ADMIN --cap-add=SYS_ADMIN aion-agent which libebpf
+sudo docker run -it  --name aaa --cap-add=NET_ADMIN --cap-add=SYS_ADMIN --memory=500M --cpus=1 aion-agent busy
 
 ```
