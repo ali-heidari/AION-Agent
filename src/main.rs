@@ -174,7 +174,7 @@ fn on_message_received(ip: String, message: String) {
 
 async fn load_ebf() -> core::result::Result<(), anyhow::Error> {
     let mut bpf = aya::Ebpf::load(aya::include_bytes_aligned!(
-        "../../AION-EBPF/target/bpfel-unknown-none/release/libebpf.so"
+        "./libebpf.so"
     ))
     .context("Failed to load eBPF object")?;
 
