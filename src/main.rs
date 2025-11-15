@@ -9,15 +9,15 @@ use aion_transporter::quic::client;
 use aion_transporter::quic::server::start_quic;
 use anyhow::Context;
 use anyhow::{Ok, Result};
-use tokio::task;
 use std::collections::HashMap;
 use std::env;
-use std::net::SocketAddr;
+use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::LazyLock;
 use std::sync::RwLock;
 use std::sync::{Arc, Mutex};
 use std::thread::sleep;
 use std::time::Duration;
+use tokio::task;
 
 use crate::configurations::load_config;
 use crate::mock::{DatasetMode, SyntheticState};
@@ -220,19 +220,46 @@ async fn load_ebf() -> core::result::Result<(), anyhow::Error> {
     println!("Redirecting to ifindex {}", ifindex);
     devmap.set(0, ifindex, None, 0)?;
 
-    let mut server_map: aya::maps::HashMap<_, u32, u32> =
-        aya::maps::HashMap::try_from(bpf.map_mut("SERVERMAP").unwrap())?;
-    server_map
-        .insert(0, u32::from_be_bytes([192, 168, 100, 134]), 0)
-        .expect("No server details defined!");
-
     let mut blocklist: aya::maps::HashMap<_, u32, u32> =
         aya::maps::HashMap::try_from(bpf.map_mut("BLOCKLIST").unwrap())?;
     let block_addr: u32 = std::net::Ipv4Addr::new(192, 168, 100, 100).into();
     blocklist.insert(block_addr, 0, 0)?;
 
-    tokio::signal::ctrl_c().await?;
-    core::result::Result::Ok(())
+    let mut server_map: aya::maps::HashMap<_, u32, u32> =
+        aya::maps::HashMap::try_from(bpf.map_mut("SERVERMAP").unwrap()).unwrap();
+    let mut found_agent: bool = false;
+    loop {
+        {
+            let agents = CACHE.read().unwrap();
+
+            for agent_borrowed in agents.iter() {
+                let agent = agent_borrowed.1.clone();
+                if agent.state == 2 || agent.state == 1 {
+                    let ipv4_addr: Ipv4Addr = agent.identifier.parse().unwrap();
+                    let ip_as_u32: u32 = ipv4_addr.into();
+                    server_map
+                        .insert(0, ip_as_u32, 0)
+                        .expect("No server details defined!");
+                    println!(
+                        "Agent: {}({}) State: {}",
+                        agent.identifier, ip_as_u32, agent.state
+                    );
+                    found_agent = true;
+                    break;
+                }
+            }
+
+            if !found_agent {
+                server_map.remove(&0).expect("Removing agent ip failed!");
+            }
+            found_agent = false;
+        }
+
+        tokio::time::sleep(tokio::time::Duration::from_secs(
+            CONFIG.get().unwrap().interval_secs,
+        ))
+        .await;
+    }
 }
 
 #[tokio::main]
@@ -263,7 +290,9 @@ async fn main() -> Result<()> {
         }
     });
     println!("Load ebpf - XDP Program");
-    load_ebf().await.expect("Can't load the ebpf!");
+    tokio::spawn(async {
+        load_ebf().await.expect("Can't load the ebpf!");
+    });
 
     tokio::signal::ctrl_c().await?;
     println!("Exiting...");
