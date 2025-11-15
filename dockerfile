@@ -20,6 +20,7 @@ COPY --from=builder /app/certificates /certificates
 COPY model-128.json ./
 COPY config.toml ./
 COPY src/libebpf.so /usr/local/lib/libebpf.so
+COPY ./mock.py /usr/local/bin/mock.py
 COPY samples/start.sh /usr/local/bin/start.sh
 RUN chmod +x /usr/local/bin/start.sh
 
