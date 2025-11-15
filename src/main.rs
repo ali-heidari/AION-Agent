@@ -15,8 +15,6 @@ use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::LazyLock;
 use std::sync::RwLock;
 use std::sync::{Arc, Mutex};
-use std::thread::sleep;
-use std::time::Duration;
 use tokio::task;
 
 use crate::configurations::load_config;
@@ -25,6 +23,12 @@ use crate::reward::compute_reward_with_success;
 
 static CACHE: LazyLock<RwLock<HashMap<String, Agent>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
+
+static ME: LazyLock<Mutex<Agent>> = LazyLock::new(|| {
+    let local_ip = local_ip().unwrap();
+    let agent = Agent::new(local_ip.to_string().as_str(), 2);
+    Mutex::new(agent)
+});
 
 #[derive(Clone)]
 struct Agent {
@@ -84,6 +88,7 @@ async fn on_data_received(address: SocketAddr, data: &[u8]) {
 }
 
 pub async fn represent(action: u8) {
+    ME.lock().unwrap().state = action;
     let all_ips: Vec<String>;
     {
         let cache = CACHE.read().unwrap();
@@ -232,26 +237,29 @@ async fn load_ebf() -> core::result::Result<(), anyhow::Error> {
         {
             let agents = CACHE.read().unwrap();
 
-            for agent_borrowed in agents.iter() {
-                let agent = agent_borrowed.1.clone();
-                if agent.state == 2 || agent.state == 1 {
-                    let ipv4_addr: Ipv4Addr = agent.identifier.parse().unwrap();
-                    let ip_as_u32: u32 = ipv4_addr.into();
-                    server_map
-                        .insert(0, ip_as_u32, 0)
-                        .expect("No server details defined!");
-                    println!(
-                        "Agent: {}({}) State: {}",
-                        agent.identifier, ip_as_u32, agent.state
-                    );
-                    found_agent = true;
-                    break;
+            if ME.lock().unwrap().state == 0 {
+                for agent_borrowed in agents.iter() {
+                    let agent = agent_borrowed.1.clone();
+                    if agent.state == 2 || agent.state == 1 {
+                        let ipv4_addr: Ipv4Addr = agent.identifier.parse().unwrap();
+                        let ip_as_u32: u32 = ipv4_addr.into();
+                        server_map
+                            .insert(0, ip_as_u32, 0)
+                            .expect("No server details defined!");
+                        println!(
+                            "Agent: {}({}) State: {}",
+                            agent.identifier, ip_as_u32, agent.state
+                        );
+                        found_agent = true;
+                        break;
+                    }
                 }
             }
 
-            if !found_agent {
-                server_map.remove(&0).expect("Removing agent ip failed!");
+            if !found_agent && let core::result::Result::Ok(_) = server_map.remove(&0) {
+                println!("No suitable agent found, clearing server map");
             }
+
             found_agent = false;
         }
 
