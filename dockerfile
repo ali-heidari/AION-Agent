@@ -20,12 +20,11 @@ COPY --from=builder /app/certificates /certificates
 COPY model-128.json ./
 COPY config.toml ./
 COPY src/libebpf.so /usr/local/lib/libebpf.so
-COPY src/libebpf.so target/bpfel-unknown-none/release/libebpf.so
+COPY samples/start.sh /usr/local/bin/start.sh
+RUN chmod +x /usr/local/bin/start.sh
 
 ENV CERT_PATH="/certificates/cert.pem" KEY_PATH="/certificates/key.pem"
 ENV LIBEBPF_PATH=/usr/local/lib/libebpf.so
 ENV RUST_LOG=info
 
-EXPOSE 8123
-
-ENTRYPOINT ["aion-agent"]
+ENTRYPOINT ["/usr/local/bin/start.sh"]
