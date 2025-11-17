@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Start the aion-agent in the background
-/usr/bin/aion-agent &
+/usr/local/bin/aion-agent &
 
 
 # parameters to know if we need to start mock.py
