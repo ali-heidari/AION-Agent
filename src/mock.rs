@@ -1,12 +1,18 @@
 use anyhow::Result;
 use core::f32;
+use csv::Writer;
 use csv::{Reader, StringRecord, StringRecordIter, StringRecordsIter};
 use std::fs::File;
 use std::io;
 use std::ops::Div;
 use std::path::Path;
 use sysinfo::System;
-use csv::Writer;
+
+use crate::metrics::{
+    SystemMetrics, cpu_usage_percent, disk_usage_bytes, get_latency_ms, get_memory_total,
+    get_net_throughput, get_swap_total, memory_usage_bytes, swap_usage_bytes,
+};
+
 const MEMORY_THRESHOLD: f32 = 0.8;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -78,6 +84,53 @@ impl SyntheticState {
         Ok(())
     }
 
+    pub fn generate_by_cgroup_metrics(&mut self) -> Vec<f32> {
+        {
+            let mut metrics = SystemMetrics::empty();
+
+            metrics.cpu_usage_percent = cpu_usage_percent().unwrap();
+            self.cpu = (metrics.cpu_usage_percent / 100.0) as f32;
+
+            metrics.memory_used_bytes = memory_usage_bytes().unwrap();
+            metrics.memory_total_bytes = get_memory_total();
+            metrics.memory_usage_percent =
+                (metrics.memory_used_bytes as f64 / metrics.memory_total_bytes as f64) * 100.0;
+            self.mem = (metrics.memory_usage_percent / 100.0) as f32;
+
+            metrics.swap_used_bytes = swap_usage_bytes().unwrap();
+            metrics.swap_total_bytes = get_swap_total();
+            metrics.swap_usage_percent = if metrics.swap_total_bytes > 0 {
+                (metrics.swap_used_bytes as f64 / metrics.swap_total_bytes as f64) * 100.0
+            } else {
+                0.0
+            };
+            self.swap = (metrics.swap_usage_percent / 100.0) as f32;
+
+            let (disk_total, disk_used, disk_free) = disk_usage_bytes("/").unwrap();
+            metrics.disk_used_bytes = disk_used;
+            metrics.disk_total_bytes = disk_total;
+            metrics.disk_usage_percent = (disk_used as f64 / disk_total as f64) * 100.0;
+            self.disk = (metrics.disk_usage_percent / 100.0) as f32;
+
+            let (rx, tx) = get_net_throughput();
+            metrics.net_rx_bytes_per_sec = rx;
+            metrics.net_tx_bytes_per_sec = tx;
+            self.throughput = ((rx + tx) as f64 / (1024.0 * 1024.0)).min(100.0) as f32 / 100.0;
+
+            metrics.latency_ms = get_latency_ms();
+            self.latency = (metrics.latency_ms / 1000.0) as f32;
+
+            vec![
+                self.cpu,
+                self.mem,
+                self.swap,
+                self.disk,
+                self.throughput,
+                self.latency,
+            ]
+        }
+    }
+
     fn generate_by_system_metrics(&mut self) -> Vec<f32> {
         use rand::Rng;
         let mut rng = rand::thread_rng();
@@ -110,21 +163,27 @@ impl SyntheticState {
             (self.latency / 1.0) * (1.0 + delta * f32::max(self.cpu, self.mem)),
         );
 
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .append(true)
+            .create(true)
+            .open("output.csv")
+            .unwrap();
+        let mut wtr = csv::WriterBuilder::new().from_writer(file);
 
+        if self.count == 1 {
+            let record = vec![
+                "cpu".to_string(),
+                "memory".to_string(),
+                "swap".to_string(),
+                "disk".to_string(),
+                "throughput".to_string(),
+                "latency".to_string(),
+            ];
+            wtr.write_record(&record);
+        }
 
-    let file = std::fs::OpenOptions::new()
-        .write(true)
-        .append(true)
-        .create(true)
-        .open("output.csv").unwrap();
-    let mut wtr =csv::WriterBuilder::new().from_writer(file);
-
-if self.count == 1 {
-    let record = vec!["cpu".to_string(), "memory".to_string(), "swap".to_string(), "disk".to_string(), "throughput".to_string(), "latency".to_string()];
-        wtr.write_record(&record);
-}
-
-  let record=vec![
+        let record = vec![
             self.cpu.to_string(),
             self.mem.to_string(),
             self.swap.to_string(),
