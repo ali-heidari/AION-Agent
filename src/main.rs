@@ -1,6 +1,7 @@
 mod configurations;
 mod mock;
 mod reward;
+mod metrics;
 
 use aion_rlt::CONFIG;
 use aion_rlt::node::Node;
