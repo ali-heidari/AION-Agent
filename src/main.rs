@@ -2,6 +2,7 @@ mod configurations;
 mod mock;
 mod reward;
 // mod metrics;
+mod get_mac_from_arp;
 
 use aion_rlt::CONFIG;
 use aion_rlt::node::Node;
@@ -21,6 +22,7 @@ use std::sync::{Arc, Mutex};
 use tokio::task;
 
 use crate::configurations::load_config;
+use crate::get_mac_from_arp::get_mac_from_arp;
 use crate::mock::{DatasetMode, SyntheticState};
 use crate::reward::compute_reward_with_success;
 
@@ -186,14 +188,14 @@ pub struct RedirectionData {
 
 unsafe impl Pod for RedirectionData {}
 
-async fn load_ebf() -> core::result::Result<(), anyhow::Error> {
+async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
     let mut bpf = aya::Ebpf::load(aya::include_bytes_aligned!("./libebpf.so"))
         .context("Failed to load eBPF object")?;
 
     let default_interface_output = std::process::Command::new("ip")
         .args(["route", "show", "default"])
         .output()
-        .unwrap()
+        .expect("Can't find default network interface!")
         .stdout;
 
     let text = String::from_utf8_lossy(&default_interface_output);
@@ -216,6 +218,7 @@ async fn load_ebf() -> core::result::Result<(), anyhow::Error> {
             });
         }
     }
+
     let program = bpf
         .program_mut("simple_xdp")
         .ok_or_else(|| anyhow::anyhow!("Program 'simple_xdp' not found"))?;
@@ -249,7 +252,8 @@ async fn load_ebf() -> core::result::Result<(), anyhow::Error> {
         {
             let agents = CACHE.read().unwrap();
 
-            if ME.lock().unwrap().state == 10 {
+            if busy {
+                //&& ME.lock().unwrap().state == 0 {
                 for agent_borrowed in agents.iter() {
                     let agent = agent_borrowed.1.clone();
                     if agent.state == 2 || agent.state == 1 {
@@ -265,7 +269,8 @@ async fn load_ebf() -> core::result::Result<(), anyhow::Error> {
                         for b in ip_as_u32.to_be_bytes() {
                             bytes.push(b);
                         }
-                        for b in [0xe6, 0x04, 0x2e, 0x13, 0x07, 0xbe] {
+                        let target_mac = get_mac_from_arp(ipv4_addr).unwrap().0;
+                        for b in target_mac {
                             bytes.push(b);
                         }
                         let data: [u8; 20] = bytes.try_into().expect("Not same length!");
@@ -300,12 +305,17 @@ async fn load_ebf() -> core::result::Result<(), anyhow::Error> {
 async fn main() -> Result<()> {
     env_logger::init();
 
+    let mut busy = false;
+
     let args: Vec<String> = env::args().collect();
     if args.len() > 2 {
-        let option = &args[1];
+        let option = &args[2];
+        println!("The args: {:?}", &args);
         if option.eq("neighbor") {
             let neighbor = &args[2];
             add_agents((neighbor.to_string() + ",2").as_str(), '|');
+        } else if option.eq("busy") {
+            busy = true;
         }
     }
 
@@ -323,9 +333,10 @@ async fn main() -> Result<()> {
             println!("Error while starting QUIC server: {:?}", e);
         }
     });
-    println!("Load ebpf - XDP Program");
-    tokio::spawn(async {
-        load_ebf().await.expect("Can't load the ebpf!");
+    println!("Load ebpf - XDP Program [busy={}]", busy);
+
+    tokio::spawn(async move {
+        load_ebf(busy).await.expect("Can't load the ebpf!");
     });
 
     tokio::signal::ctrl_c().await?;
