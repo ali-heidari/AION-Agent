@@ -1,7 +1,7 @@
 mod configurations;
 mod mock;
 mod reward;
-mod metrics;
+// mod metrics;
 
 use aion_rlt::CONFIG;
 use aion_rlt::node::Node;
@@ -10,6 +10,8 @@ use aion_transporter::quic::client;
 use aion_transporter::quic::server::start_quic;
 use anyhow::Context;
 use anyhow::{Ok, Result};
+use aya::Pod;
+use local_ip_address::local_ip;
 use std::collections::HashMap;
 use std::env;
 use std::net::{Ipv4Addr, SocketAddr};
@@ -129,7 +131,7 @@ async fn listen_to_agents() {
         println!("Listening thread closed");
     });
 }
-use local_ip_address::local_ip;
+
 async fn send_hello() {
     let local_ip = local_ip().unwrap();
     let message = local_ip.to_string() + ",2";
@@ -173,11 +175,20 @@ fn on_message_received(ip: String, message: String) {
     add_agents(details.as_str(), '|');
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub struct RedirectionData {
+    local_ip: u32,
+    local_mac: [u8; 6],
+    server_ip: u32,
+    server_mac: [u8; 6],
+}
+
+unsafe impl Pod for RedirectionData {}
+
 async fn load_ebf() -> core::result::Result<(), anyhow::Error> {
-    let mut bpf = aya::Ebpf::load(aya::include_bytes_aligned!(
-        "./libebpf.so"
-    ))
-    .context("Failed to load eBPF object")?;
+    let mut bpf = aya::Ebpf::load(aya::include_bytes_aligned!("./libebpf.so"))
+        .context("Failed to load eBPF object")?;
 
     let default_interface_output = std::process::Command::new("ip")
         .args(["route", "show", "default"])
@@ -231,21 +242,35 @@ async fn load_ebf() -> core::result::Result<(), anyhow::Error> {
     let block_addr: u32 = std::net::Ipv4Addr::new(192, 168, 100, 100).into();
     blocklist.insert(block_addr, 0, 0)?;
 
-    let mut server_map: aya::maps::HashMap<_, u32, u32> =
+    let mut server_map: aya::maps::HashMap<_, u32, [u8; 20]> =
         aya::maps::HashMap::try_from(bpf.map_mut("SERVERMAP").unwrap()).unwrap();
     let mut found_agent: bool = false;
     loop {
         {
             let agents = CACHE.read().unwrap();
 
-            if ME.lock().unwrap().state == 0 {
+            if ME.lock().unwrap().state == 10 {
                 for agent_borrowed in agents.iter() {
                     let agent = agent_borrowed.1.clone();
                     if agent.state == 2 || agent.state == 1 {
                         let ipv4_addr: Ipv4Addr = agent.identifier.parse().unwrap();
                         let ip_as_u32: u32 = ipv4_addr.into();
+                        let ip = local_ip().unwrap();
+                        let local_ip: u32 = ip.to_string().parse::<Ipv4Addr>().unwrap().into();
+                        let local_mac = mac_address::get_mac_address().unwrap().unwrap().bytes();
+                        let mut bytes: Vec<u8> = local_ip.to_be_bytes().into();
+                        for b in local_mac {
+                            bytes.push(b);
+                        }
+                        for b in ip_as_u32.to_be_bytes() {
+                            bytes.push(b);
+                        }
+                        for b in [0xe6, 0x04, 0x2e, 0x13, 0x07, 0xbe] {
+                            bytes.push(b);
+                        }
+                        let data: [u8; 20] = bytes.try_into().expect("Not same length!");
                         server_map
-                            .insert(0, ip_as_u32, 0)
+                            .insert(0, data, 0)
                             .expect("No server details defined!");
                         println!(
                             "Agent: {}({}) State: {}",
