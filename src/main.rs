@@ -248,6 +248,10 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
     let mut server_map: aya::maps::HashMap<_, u32, [u8; 20]> =
         aya::maps::HashMap::try_from(bpf.map_mut("SERVERMAP").unwrap()).unwrap();
     let mut found_agent: bool = false;
+
+    let ip = local_ip().unwrap();
+    let local_ip: u32 = ip.to_string().parse::<Ipv4Addr>().unwrap().into();
+    let local_mac = mac_address::get_mac_address().unwrap().unwrap().bytes();
     loop {
         {
             let agents = CACHE.read().unwrap();
@@ -258,10 +262,11 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
                     let agent = agent_borrowed.1.clone();
                     if agent.state == 2 || agent.state == 1 {
                         let ipv4_addr: Ipv4Addr = agent.identifier.parse().unwrap();
+
                         let ip_as_u32: u32 = ipv4_addr.into();
-                        let ip = local_ip().unwrap();
-                        let local_ip: u32 = ip.to_string().parse::<Ipv4Addr>().unwrap().into();
-                        let local_mac = mac_address::get_mac_address().unwrap().unwrap().bytes();
+                        if local_ip == ip_as_u32 {
+                            continue;
+                        }
                         let mut bytes: Vec<u8> = local_ip.to_be_bytes().into();
                         for b in local_mac {
                             bytes.push(b);
@@ -269,7 +274,12 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
                         for b in ip_as_u32.to_be_bytes() {
                             bytes.push(b);
                         }
-                        let target_mac = get_mac_from_arp(ipv4_addr).unwrap().0;
+                        let target_mac = if let Some(val) = get_mac_from_arp(ipv4_addr) {
+                            val.0
+                        } else {
+                            println!("Failed to parse target MAC: {:?}", ipv4_addr);
+                            continue;
+                        };
                         for b in target_mac {
                             bytes.push(b);
                         }
