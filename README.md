@@ -11,4 +11,7 @@ sudo docker build -t aion-agent .
 
 sudo docker run -it  --name aaa --cap-add=NET_ADMIN --cap-add=SYS_ADMIN --memory=50M --cpus=1 aion-agent -- busy
 
+monitor dockers network
+sudo docker run -it --rm   --net=container:aaa   nicolaka/netshoot tcpdump -i eth0 -nn -e
+
 ```
