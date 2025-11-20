@@ -22,7 +22,7 @@ use std::sync::{Arc, Mutex};
 use tokio::task;
 
 use crate::configurations::load_config;
-use crate::get_mac_from_arp::get_mac_from_arp;
+use crate::get_mac_from_arp::{get_mac_from_arp, read_lines};
 use crate::mock::{DatasetMode, SyntheticState};
 use crate::reward::compute_reward_with_success;
 
@@ -251,7 +251,7 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
 
     let ip = local_ip().unwrap();
     let local_ip: u32 = ip.to_string().parse::<Ipv4Addr>().unwrap().into();
-    let local_mac = mac_address::get_mac_address().unwrap().unwrap().bytes();
+    let local_mac: [u8; 6] = mac_address::get_mac_address().unwrap().unwrap().bytes();
     loop {
         {
             let agents = CACHE.read().unwrap();
@@ -274,7 +274,7 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
                         for b in ip_as_u32.to_be_bytes() {
                             bytes.push(b);
                         }
-                        let target_mac = if let Some(val) = get_mac_from_arp(ipv4_addr) {
+                        let target_mac: [u8; 6] = if let Some(val) = get_mac_from_arp(ipv4_addr) {
                             val.0
                         } else {
                             println!("Failed to parse target MAC: {:?}", ipv4_addr);
