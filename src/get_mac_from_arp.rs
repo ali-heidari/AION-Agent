@@ -42,3 +42,17 @@ pub fn get_mac_from_arp(ip: Ipv4Addr) -> Option<MacAddress> {
 
     None
 }
+
+
+pub fn read_lines(path: &str) -> std::io::Result<Vec<String>> {
+    let file = File::open(path)?;
+    let reader = BufReader::new(file);
+
+    let mut lines =vec![];
+    for line in reader.lines() {
+        let line = line?; 
+        lines.push(line);
+    }
+
+    Ok(lines)
+}
