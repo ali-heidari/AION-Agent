@@ -39,6 +39,7 @@ static ME: LazyLock<Mutex<Agent>> = LazyLock::new(|| {
 struct Agent {
     identifier: String,
     state: u8,
+    update_time: u64,
 }
 
 impl Agent {
@@ -46,6 +47,10 @@ impl Agent {
         Agent {
             identifier: identifier.to_owned(),
             state,
+            update_time: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
         }
     }
 
@@ -53,10 +58,22 @@ impl Agent {
         let segments: Vec<&str> = data.split(",").collect();
         let identifier: &str = segments[0];
         let state: u8 = segments[1].parse().unwrap();
+        let update_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
 
         let agent = Agent::new(identifier, state);
         {
             let mut cache = CACHE.write().unwrap();
+
+            let agent_option = cache.get_mut(identifier);
+            if let Some(existing_agent) = agent_option
+                && existing_agent.update_time - update_time > 10
+            {
+                cache.remove(identifier);
+            }
+
             cache.insert(identifier.to_owned(), agent.clone());
         }
 
