@@ -256,8 +256,7 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
         {
             let agents = CACHE.read().unwrap();
 
-            if busy {
-                //&& ME.lock().unwrap().state == 0 {
+            if busy || ME.lock().unwrap().state == 0 {
                 for agent_borrowed in agents.iter() {
                     let agent = agent_borrowed.1.clone();
                     if agent.state == 2 || agent.state == 1 {
