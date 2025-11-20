@@ -14,4 +14,10 @@ sudo docker run -it  --name aaa --cap-add=NET_ADMIN --cap-add=SYS_ADMIN --memory
 monitor dockers network
 sudo docker run -it --rm   --net=container:aaa   nicolaka/netshoot tcpdump -i eth0 -nn -e
 
+Add network
+sudo docker network create -d macvlan   --subnet=192.168.1.0/24   --gateway=192.168.1.1   -o parent=wlp3s0   mymacvlan
+
+
+run container with macvlan network
+ sudo docker run -it  --name lll --cap-add=NET_ADMIN --cap-add=SYS_ADMIN --memory=50M --cpus=1  --network=mymacvlan --ip=192.168.1.70 aion-agent 
 ```
