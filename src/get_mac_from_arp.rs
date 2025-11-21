@@ -1,9 +1,43 @@
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::net::Ipv4Addr;
+use std::vec;
+
+pub struct ARPTable {
+    pub ip: String,
+    hw_type: u8,
+    flags: u8,
+    hw_address: String,
+    mask: String,
+    device: String,
+}
 
 #[derive(Debug, Clone)]
 pub struct MacAddress(pub [u8; 6]);
+
+pub fn get_machines_from_arp() -> Option<Vec<Ipv4Addr>> {
+    let file = File::open("/proc/net/arp").ok()?;
+    let reader = BufReader::new(file);
+    let mut ips: Vec<Ipv4Addr>=vec![];
+
+    // Skip header line
+    for (i, line) in reader.lines().enumerate() {
+        let line = line.ok()?;
+        if i <= 1 {
+            continue;
+        }
+
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() < 6 {
+            continue;
+        }
+
+        let entry_ip = parts[0];
+        ips.push(entry_ip.parse().unwrap());
+    }
+
+    Some(ips)
+}
 
 pub fn get_mac_from_arp(ip: Ipv4Addr) -> Option<MacAddress> {
     let file = File::open("/proc/net/arp").ok()?;
@@ -43,14 +77,13 @@ pub fn get_mac_from_arp(ip: Ipv4Addr) -> Option<MacAddress> {
     None
 }
 
-
 pub fn read_lines(path: &str) -> std::io::Result<Vec<String>> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
 
-    let mut lines =vec![];
+    let mut lines = vec![];
     for line in reader.lines() {
-        let line = line?; 
+        let line = line?;
         lines.push(line);
     }
 
