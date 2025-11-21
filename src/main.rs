@@ -22,7 +22,7 @@ use std::sync::{Arc, Mutex};
 use tokio::task;
 
 use crate::configurations::load_config;
-use crate::get_mac_from_arp::{get_mac_from_arp, read_lines};
+use crate::get_mac_from_arp::{get_mac_from_arp, get_machines_from_arp, read_lines};
 use crate::mock::{DatasetMode, SyntheticState};
 use crate::reward::compute_reward_with_success;
 
@@ -31,22 +31,24 @@ static CACHE: LazyLock<RwLock<HashMap<String, Agent>>> =
 
 static ME: LazyLock<Mutex<Agent>> = LazyLock::new(|| {
     let local_ip = local_ip().unwrap();
-    let agent = Agent::new(local_ip.to_string().as_str(), 2);
+    let agent = Agent::new(local_ip.to_string().as_str(), [0u8; 6], 2);
     Mutex::new(agent)
 });
 
 #[derive(Clone)]
 struct Agent {
     identifier: String,
+    mac: [u8; 6],
     state: u8,
     update_time: u64,
 }
 
 impl Agent {
-    fn new(identifier: &str, state: u8) -> Self {
+    fn new(identifier: &str, mac: [u8; 6], state: u8) -> Self {
         Agent {
             identifier: identifier.to_owned(),
             state,
+            mac,
             update_time: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
@@ -57,13 +59,18 @@ impl Agent {
     fn parse(data: &str) -> Agent {
         let segments: Vec<&str> = data.split(",").collect();
         let identifier: &str = segments[0];
-        let state: u8 = segments[1].parse().unwrap();
+        let mac: Vec<u8> = segments[1]
+            .split(":")
+            .map(|x| u8::from_str_radix(x, 16).expect("Invalid hex digit"))
+            .collect();
+        let mac: [u8; 6] = mac.try_into().expect("Invalid MAC address length");
+        let state: u8 = segments[2].parse().unwrap();
         let update_time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
 
-        let mut agent = Agent::new(identifier, state);
+        let mut agent = Agent::new(identifier, mac, state);
         {
             let mut cache = CACHE.write().unwrap();
 
@@ -82,7 +89,11 @@ impl Agent {
     }
 
     fn stringify(&self) -> String {
-        self.identifier.to_string() + "," + self.state.to_string().as_str()
+        self.identifier.to_string()
+            + ","
+            + self.mac.map(|x| x.to_string()).join(":").as_str()
+            + ","
+            + self.state.to_string().as_str()
     }
 }
 
@@ -101,16 +112,25 @@ fn add_agents(details: &str, separator: char) {
 async fn on_data_received(address: SocketAddr, data: &[u8]) {
     let message = String::from_utf8(data.to_vec()).unwrap();
     println!("message came from {} says: {:?}", address.ip(), message);
+    if message.contains('=') {
+        {
+            let mut cache = CACHE.write().unwrap();
+            cache.remove(message.split('=').next().unwrap());
+            return;
+        }
+    }
     if message.contains("[over]") {
         return;
     }
 
     add_agents(&message, '|');
 
-    represent(2).await;
+    // represent(2).await;
 }
 
 pub async fn represent(action: u8) {
+    send_hello(action).await;
+    return;
     ME.lock().unwrap().state = action;
     let all_ips: Vec<String>;
     {
@@ -152,9 +172,24 @@ async fn listen_to_agents() {
     });
 }
 
-async fn send_hello() {
+async fn send_hello(action: u8) {
     let local_ip = local_ip().unwrap();
-    let message = local_ip.to_string() + ",2";
+    let message = local_ip.to_string()
+        + ","
+        + mac_address::get_mac_address()
+            .unwrap()
+            .unwrap()
+            .to_string()
+            .as_str()
+        + ","
+        + action.to_string().as_str();
+    if let Err(error) = multicast::send(message.as_str()).await {
+        println!("Error while sending hello: {:?}", error);
+    }
+}
+async fn send_off_machine(ip: &str) {
+    let local_ip = local_ip().unwrap();
+    let message = local_ip.to_string() + "=-1";
     if let Err(error) = multicast::send(message.as_str()).await {
         println!("Error while sending hello: {:?}", error);
     }
@@ -277,7 +312,22 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
             if busy || ME.lock().unwrap().state == 0 {
                 for agent_borrowed in agents.iter() {
                     let agent = agent_borrowed.1.clone();
+
+                    let default_interface_output = std::process::Command::new("ping")
+                        .args(["-c", "1", "-W", "1", agent.identifier.as_str()])
+                        .output()
+                        .expect("Can't find default network interface!")
+                        .stdout;
+                    let text: std::borrow::Cow<'_, str> =
+                        String::from_utf8_lossy(&default_interface_output);
+
+                    if text.contains("100% packet loss") {
+                        send_off_machine(&agent.identifier);
+                        continue;
+                    }
+
                     if agent.state == 2 || agent.state == 1 {
+                        println!(">>>>>>>>> {}", agent.stringify());
                         let ipv4_addr: Ipv4Addr = agent.identifier.parse().unwrap();
 
                         let ip_as_u32: u32 = ipv4_addr.into();
@@ -291,12 +341,13 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
                         for b in ip_as_u32.to_be_bytes() {
                             bytes.push(b);
                         }
-                        let target_mac: [u8; 6] = if let Some(val) = get_mac_from_arp(ipv4_addr) {
-                            val.0
-                        } else {
-                            println!("Failed to parse target MAC: {:?}", ipv4_addr);
-                            continue;
-                        };
+                        let target_mac: [u8; 6] = agent.mac;
+                        // if let Some(val) = get_mac_from_arp(ipv4_addr) {
+                        //     val.0
+                        // } else {
+                        //     println!("Failed to parse target MAC: {:?}", ipv4_addr);
+                        //     continue;
+                        // };
                         for b in target_mac {
                             bytes.push(b);
                         }
@@ -349,17 +400,17 @@ async fn main() -> Result<()> {
     aion_transporter::quic::init();
 
     println!("Broadcasting hello!");
-    send_hello().await;
+    send_hello(2).await;
     println!("Listening to multicast packets!");
     listen_to_agents().await;
     println!("Start AI");
     start_ai();
-    println!("Running quic server!");
-    task::spawn(async {
-        if let Err(e) = start_quic(4433, on_message_received).await {
-            println!("Error while starting QUIC server: {:?}", e);
-        }
-    });
+    // println!("Running quic server!");
+    // task::spawn(async {
+    //     if let Err(e) = start_quic(4433, on_message_received).await {
+    //         println!("Error while starting QUIC server: {:?}", e);
+    //     }
+    // });
     println!("Load ebpf - XDP Program [busy={}]", busy);
 
     tokio::spawn(async move {
