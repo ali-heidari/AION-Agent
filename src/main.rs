@@ -63,7 +63,7 @@ impl Agent {
             .unwrap()
             .as_secs();
 
-        let agent = Agent::new(identifier, state);
+        let mut agent = Agent::new(identifier, state);
         {
             let mut cache = CACHE.write().unwrap();
 
@@ -72,8 +72,9 @@ impl Agent {
                 && existing_agent.update_time - update_time > 10
             {
                 cache.remove(identifier);
+                return agent;
             }
-
+            agent.update_time = update_time;
             cache.insert(identifier.to_owned(), agent.clone());
         }
 
