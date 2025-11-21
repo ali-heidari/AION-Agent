@@ -1,6 +1,6 @@
 use aion_transporter::quic;
 
-use crate::represent;
+use crate::{ME, represent};
 
 pub fn compute_reward(features: &Vec<f32>) -> f32 {
     let cpu = features[0].clamp(0.0, 1.0);
@@ -27,7 +27,13 @@ pub fn compute_reward_with_success(features: &Vec<f32>, action: u8) -> (f32, boo
     println!("Environment metrics: {:?}", features);
     println!("Decision made: {}", action);
 
-    tokio::spawn(represent(action));
+    {
+        let mut me = ME.lock().unwrap();
+        if me.state != action {
+            me.state = action;
+            tokio::spawn(represent(action));
+        }
+    }
 
     return (1.0, true);
 
