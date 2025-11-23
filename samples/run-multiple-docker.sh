@@ -2,7 +2,7 @@
 
 # Starting number
 base=60
-count=100
+count=10
 
 for i in $(seq 0 $((count-1))); do
     number=$((base + i))
@@ -17,4 +17,3 @@ for i in $(seq 0 $((count-1))); do
         --ip=192.168.1.$number \
         aion-agent
 done
-1:06
