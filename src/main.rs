@@ -59,28 +59,37 @@ impl Agent {
     fn parse(data: &str) -> Agent {
         let segments: Vec<&str> = data.split(",").collect();
         let identifier: &str = segments[0];
-        let mac: Vec<u8> = segments[1]
-            .split(":")
-            .map(|x| u8::from_str_radix(x, 16).expect("Invalid hex digit"))
-            .collect();
-        let mac: [u8; 6] = mac.try_into().expect("Invalid MAC address length");
-        let state: u8 = segments[2].parse().unwrap();
+        let state: u8 = segments[1].parse().unwrap();
+
+        let mut mac: [u8; 6] = [0u8; 6];
+        if segments.len() > 2 {
+            let mac_temp: Vec<u8> = segments[2]
+                .split(":")
+                .map(|x| u8::from_str_radix(x, 16).expect("Invalid hex digit"))
+                .collect();
+            mac = mac_temp.try_into().expect("Invalid MAC address length");
+        }
         let update_time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
 
-        let mut agent = Agent::new(identifier, mac, state);
+        let mut agent;
         {
             let mut cache = CACHE.write().unwrap();
 
             let agent_option = cache.get_mut(identifier);
-            if let Some(existing_agent) = agent_option
-                && existing_agent.update_time - update_time > 10
-            {
+            agent = if let Some(existing_agent) = agent_option {
+                existing_agent.clone()
+            } else {
+                Agent::new(identifier, mac, state)
+            };
+
+            if agent.update_time - update_time > 10 {
                 cache.remove(identifier);
                 return agent;
             }
+
             agent.update_time = update_time;
             cache.insert(identifier.to_owned(), agent.clone());
         }
@@ -129,7 +138,7 @@ async fn on_data_received(address: SocketAddr, data: &[u8]) {
 }
 
 pub async fn represent(action: u8) {
-    send_hello(action).await;
+    send_hello(action, false).await;
     return;
     ME.lock().unwrap().state = action;
     let all_ips: Vec<String>;
@@ -172,17 +181,20 @@ async fn listen_to_agents() {
     });
 }
 
-async fn send_hello(action: u8) {
+async fn send_hello(action: u8, include_mac: bool) {
     let local_ip = local_ip().unwrap();
-    let message = local_ip.to_string()
-        + ","
-        + mac_address::get_mac_address()
-            .unwrap()
-            .unwrap()
-            .to_string()
-            .as_str()
-        + ","
-        + action.to_string().as_str();
+    let mut message = local_ip.to_string() + "," + action.to_string().as_str();
+
+    if include_mac {
+        message = message
+            + ","
+            + mac_address::get_mac_address()
+                .unwrap()
+                .unwrap()
+                .to_string()
+                .as_str()
+    }
+
     if let Err(error) = multicast::send(message.as_str()).await {
         println!("Error while sending hello: {:?}", error);
     }
@@ -400,7 +412,7 @@ async fn main() -> Result<()> {
     aion_transporter::quic::init();
 
     println!("Broadcasting hello!");
-    send_hello(2).await;
+    send_hello(2, true).await;
     println!("Listening to multicast packets!");
     listen_to_agents().await;
     println!("Start AI");
