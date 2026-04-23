@@ -124,6 +124,10 @@ cargo test
 
 Contributions are welcome. Please open issues or pull requests.
 
+## Donations
+
+Support this project: [Open Collective](https://opencollective.com/aixkernel)
+
 ## License
 
-MIT License
+This project is licensed under the terms in the [LICENSE](LICENSE) file.
