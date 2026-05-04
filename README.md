@@ -8,7 +8,7 @@ Each agent intercepts incoming requests and uses reinforcement learning (RL) to 
 
 ## Standards
 
-This project follows the `ai-agent-standards` repository as the base guidance. See `.github/copilot-instructions.md` for project-specific AI agent guidance, and use `ai-agent-standards/README.md` as the source of truth for shared conventions.
+This project follows the `ai-agent-standards` repository as the base guidance. See `.github/copilot-instructions.md` for project-specific AI agent guidance, and use `ai-agent-standards/instructions.md` as the canonical base guidance. The base `instructions.md` links to the shared conventions in `code-conventions.md`, `cicd-conventions.md`, `commit-conventions.md`, `docs-conventions.md`, and `repository.md`.
 
 ## Features
 
