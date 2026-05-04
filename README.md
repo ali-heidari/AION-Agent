@@ -6,6 +6,10 @@ A distributed, ML-driven network orchestration system written in Rust. Part of *
 
 Each agent intercepts incoming requests and uses reinforcement learning (RL) to decide whether to route locally (low load) or redirect to neighbor agents (high load). The system optimizes micro-routing decisions in microseconds, complementing Kubernetes for intra-pod distribution and pre-routing solutions like Nginx/Kong.
 
+## Standards
+
+This project follows the `ai-agent-standards` repository as the base guidance. See `.github/copilot-instructions.md` for project-specific AI agent guidance, and use `ai-agent-standards/README.md` as the source of truth for shared conventions.
+
 ## Features
 
 - **Ultra-low latency**: Microsecond-scale kernel-level packet redirection via XDP
