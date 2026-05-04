@@ -69,7 +69,7 @@ def cpu_load():
 
 def memory_load():
     chunk_size_mb = 100  # Memory chunk size in MB
-    num_chunks = 80 # Number of memory chunks
+    num_chunks = 70 # Number of memory chunks
     while True:
         print("Memory: Ramping up...")
         mem_chunks = []

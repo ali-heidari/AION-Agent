@@ -63,12 +63,12 @@ function getCurrentTargetGroup(timeOffset) {
     // STAGE 1 (1m duration) is from 30s to 90s (30 + 60)
     else if (timeOffset < 90) {
         // Hit 10 IPs: indices 0-9
-        return TARGET_IPS.slice(0, 10); 
+        return TARGET_IPS.slice(0, 7); 
     } 
     // STAGE 2 (1m duration) is from 90s to 150s (90 + 60)
     else if (timeOffset < 150) {
         // Hit 9 IPs: indices 0-8
-        return TARGET_IPS.slice(0, 9);
+        return TARGET_IPS.slice(0, 8);
     } 
     // STAGE 3 (1m duration) is from 150s to 210s (150 + 60)
     else if (timeOffset < 210) {
