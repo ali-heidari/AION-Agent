@@ -1,6 +1,33 @@
-# AION-Agent AI Instructions
+# Copilot / AI Agent Instructions — AION-Agent
 
-## Project Overview
+Purpose
+- This project is a distributed, RL-driven network orchestration system written in Rust.
+- It uses reinforcement learning and eBPF/XDP packet handling to make low-latency routing decisions across nodes.
+
+Key files
+- `src/main.rs` — application entry point and runtime orchestration
+- `src/configurations.rs` — configuration loading and runtime parameters
+- `src/mock.rs` — synthetic and system-metric dataset support
+- `src/reward.rs` — RL reward logic
+- `Cargo.toml` — Rust dependencies and build configuration
+- `README.md` — repo overview and usage instructions
+
+Base standards
+- This project adopts the `ai-agent-standards` repository as the base standard.
+- Use `ai-agent-standards/instructions.md` as the canonical base guidance.
+- The base `instructions.md` links to the shared conventions in `code-conventions.md`, `cicd-conventions.md`, `commit-conventions.md`, and `docs-conventions.md`.
+
+Core rule
+- Do not invent build or CI steps unless explicit manifest or build files exist in this repo (for example `Cargo.toml`, `Makefile`, or `pyproject.toml`).
+
+How to use these standards
+- Option 1: copy the relevant `ai-agent-standards` files into this repo root.
+- Option 2: reference `ai-agent-standards` as a git submodule or shared template, and keep a small local README note describing the source of truth.
+
+Example wording
+> This project adopts the `ai-agent-standards` template. Use those files as the base conventions for code generation, CI guidance, commit format, and docs policy.
+
+
 AION-Agent is a distributed, ML-driven network orchestration system written in Rust. It's part of **Aixker** — a kernel-level RL-driven load routing system for Linux nodes. Each agent intercepts incoming requests and uses RL to decide: route locally (low load) or redirect to neighbor agents (high load). The system optimizes micro-routing decisions in microseconds, complementing Kubernetes for intra-pod distribution and pre-routing solutions like Nginx/Kong.
 
 **Design Goals:**
