@@ -20,12 +20,13 @@ COPY --from=builder /app/certificates /certificates
 COPY model-128.json ./
 COPY config.toml ./
 COPY src/libebpf.so /usr/local/lib/libebpf.so
-COPY ./mock.py /usr/local/bin/mock.py
+COPY ./mock-for-small-container.py /usr/local/bin/mock.py
 COPY samples/start.sh /usr/local/bin/start.sh
+COPY samples/arp /arp
 RUN chmod +x /usr/local/bin/start.sh
 
 ENV CERT_PATH="/certificates/cert.pem" KEY_PATH="/certificates/key.pem"
 ENV LIBEBPF_PATH=/usr/local/lib/libebpf.so
-ENV RUST_LOG=info
+# ENV RUST_LOG=info
 
 ENTRYPOINT ["/usr/local/bin/start.sh"]
