@@ -27,6 +27,7 @@ pub fn compute_reward_with_success(features: &Vec<f32>, action: u8) -> (f32, boo
     println!("Environment metrics: {:?}", features);
     println!("Decision made: {}", action);
 
+    #[cfg(not(test))]
     {
         let mut me = ME.lock().unwrap();
         if me.state != action {

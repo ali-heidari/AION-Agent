@@ -8,10 +8,10 @@ use std::ops::Div;
 use std::path::Path;
 use sysinfo::System;
 
-use crate::metrics::{
-    SystemMetrics, cpu_usage_percent, disk_usage_bytes, get_latency_ms, get_memory_total,
-    get_net_throughput, get_swap_total, memory_usage_bytes, swap_usage_bytes,
-};
+// use crate::metrics::{
+//     SystemMetrics, cpu_usage_percent, disk_usage_bytes, get_latency_ms, get_memory_total,
+//     get_net_throughput, get_swap_total, memory_usage_bytes, swap_usage_bytes,
+// };
 
 const MEMORY_THRESHOLD: f32 = 0.8;
 
@@ -84,52 +84,6 @@ impl SyntheticState {
         Ok(())
     }
 
-    pub fn generate_by_cgroup_metrics(&mut self) -> Vec<f32> {
-        {
-            let mut metrics = SystemMetrics::empty();
-
-            metrics.cpu_usage_percent = cpu_usage_percent().unwrap();
-            self.cpu = (metrics.cpu_usage_percent / 100.0) as f32;
-
-            metrics.memory_used_bytes = memory_usage_bytes().unwrap();
-            metrics.memory_total_bytes = get_memory_total();
-            metrics.memory_usage_percent =
-                (metrics.memory_used_bytes as f64 / metrics.memory_total_bytes as f64) * 100.0;
-            self.mem = (metrics.memory_usage_percent / 100.0) as f32;
-
-            metrics.swap_used_bytes = swap_usage_bytes().unwrap();
-            metrics.swap_total_bytes = get_swap_total();
-            metrics.swap_usage_percent = if metrics.swap_total_bytes > 0 {
-                (metrics.swap_used_bytes as f64 / metrics.swap_total_bytes as f64) * 100.0
-            } else {
-                0.0
-            };
-            self.swap = (metrics.swap_usage_percent / 100.0) as f32;
-
-            let (disk_total, disk_used, disk_free) = disk_usage_bytes("/").unwrap();
-            metrics.disk_used_bytes = disk_used;
-            metrics.disk_total_bytes = disk_total;
-            metrics.disk_usage_percent = (disk_used as f64 / disk_total as f64) * 100.0;
-            self.disk = (metrics.disk_usage_percent / 100.0) as f32;
-
-            let (rx, tx) = get_net_throughput();
-            metrics.net_rx_bytes_per_sec = rx;
-            metrics.net_tx_bytes_per_sec = tx;
-            self.throughput = ((rx + tx) as f64 / (1024.0 * 1024.0)).min(100.0) as f32 / 100.0;
-
-            metrics.latency_ms = get_latency_ms();
-            self.latency = (metrics.latency_ms / 1000.0) as f32;
-
-            vec![
-                self.cpu,
-                self.mem,
-                self.swap,
-                self.disk,
-                self.throughput,
-                self.latency,
-            ]
-        }
-    }
 
     fn generate_by_system_metrics(&mut self) -> Vec<f32> {
         use rand::Rng;
@@ -347,5 +301,49 @@ impl SyntheticState {
             DatasetMode::Inputs => self.generate_by_inputs(cpu, mem, lowest_state),
             DatasetMode::SystemMetrics => self.generate_by_system_metrics(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_synthetic_state_new() {
+        let state = SyntheticState::new(DatasetMode::Generative);
+        assert_eq!(state.cpu, 0.1);
+        assert_eq!(state.mem, 0.1);
+        assert_eq!(state.swap, 0.05);
+        assert_eq!(state.disk, 0.1);
+        assert_eq!(state.throughput, 0.95);
+        assert_eq!(state.latency, 0.1);
+        assert_eq!(state.direction, 1.0);
+        assert_eq!(state.count, 0);
+        assert!(state.records.is_empty());
+        assert_eq!(state.mode, DatasetMode::Generative);
+    }
+
+    #[test]
+    fn test_next_generative() {
+        let mut state = SyntheticState::new(DatasetMode::Generative);
+        let features = state.next(0.0, 0.0, 0);
+        assert_eq!(features.len(), 6);
+        for &f in &features {
+            assert!(f >= 0.0 && f <= 1.0);
+        }
+        assert_eq!(state.count, 1);
+    }
+
+    #[test]
+    fn test_next_generative_multiple() {
+        let mut state = SyntheticState::new(DatasetMode::Generative);
+        for _ in 0..10 {
+            let features = state.next(0.0, 0.0, 0);
+            assert_eq!(features.len(), 6);
+            for &f in &features {
+                assert!(f >= 0.0 && f <= 1.0);
+            }
+        }
+        assert_eq!(state.count, 10);
     }
 }
