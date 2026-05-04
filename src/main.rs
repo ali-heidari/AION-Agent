@@ -1,14 +1,12 @@
 mod configurations;
 mod mock;
 mod reward;
-// mod metrics;
 mod get_mac_from_arp;
 
 use aion_rlt::CONFIG;
 use aion_rlt::node::Node;
 use aion_transporter::multicast;
 use aion_transporter::quic::client;
-use aion_transporter::quic::server::start_quic;
 use anyhow::Context;
 use anyhow::{Ok, Result};
 use aya::Pod;
@@ -19,10 +17,8 @@ use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::LazyLock;
 use std::sync::RwLock;
 use std::sync::{Arc, Mutex};
-use tokio::task;
 
 use crate::configurations::load_config;
-use crate::get_mac_from_arp::{get_mac_from_arp, get_machines_from_arp, read_lines};
 use crate::mock::{DatasetMode, SyntheticState};
 use crate::reward::compute_reward_with_success;
 

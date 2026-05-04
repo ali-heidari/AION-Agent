@@ -1,8 +1,4 @@
-use aion_transporter::quic;
-
-use crate::{ME, represent};
-
-pub fn compute_reward(features: &Vec<f32>) -> f32 {
+pub fn compute_reward(features: &[f32]) -> f32 {
     let cpu = features[0].clamp(0.0, 1.0);
     let mem = features[1].clamp(0.0, 1.0);
     let swap = features[2].clamp(0.0, 1.0);
@@ -23,14 +19,18 @@ pub fn compute_reward(features: &Vec<f32>) -> f32 {
     reward.clamp(-1.0, 1.0)
 }
 
-pub fn compute_reward_with_success(features: &Vec<f32>, action: u8) -> (f32, bool) {
+pub fn compute_reward_with_success(features: &[f32], action: u8) -> (f32, bool) {
     println!("Environment metrics: {:?}", features);
     println!("Decision made: {}", action);
 
     #[cfg(not(test))]
     {
+        use crate::ME;
+
         let mut me = ME.lock().unwrap();
         if me.state != action {
+            use crate::represent;
+
             me.state = action;
             tokio::spawn(represent(action));
         }

@@ -1,17 +1,8 @@
 use anyhow::Result;
 use core::f32;
-use csv::Writer;
-use csv::{Reader, StringRecord, StringRecordIter, StringRecordsIter};
-use std::fs::File;
-use std::io;
 use std::ops::Div;
 use std::path::Path;
 use sysinfo::System;
-
-// use crate::metrics::{
-//     SystemMetrics, cpu_usage_percent, disk_usage_bytes, get_latency_ms, get_memory_total,
-//     get_net_throughput, get_swap_total, memory_usage_bytes, swap_usage_bytes,
-// };
 
 const MEMORY_THRESHOLD: f32 = 0.8;
 
@@ -48,7 +39,7 @@ impl SyntheticState {
             direction: 1.0,
             count: 0,
             records: vec![],
-            mode: mode,
+            mode,
         }
     }
 
@@ -83,7 +74,6 @@ impl SyntheticState {
         println!("Dataset has been loaded!");
         Ok(())
     }
-
 
     fn generate_by_system_metrics(&mut self) -> Vec<f32> {
         use rand::Rng;
@@ -329,7 +319,7 @@ mod tests {
         let features = state.next(0.0, 0.0, 0);
         assert_eq!(features.len(), 6);
         for &f in &features {
-            assert!(f >= 0.0 && f <= 1.0);
+            assert!((0.0..=1.0).contains(&f));
         }
         assert_eq!(state.count, 1);
     }
@@ -341,7 +331,7 @@ mod tests {
             let features = state.next(0.0, 0.0, 0);
             assert_eq!(features.len(), 6);
             for &f in &features {
-                assert!(f >= 0.0 && f <= 1.0);
+                assert!((0.0..=1.0).contains(&f));
             }
         }
         assert_eq!(state.count, 10);
