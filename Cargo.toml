@@ -1,10 +1,10 @@
 [package]
-name = "aion-agent"
+name = "aixker-agent"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-aion-rlt = {  git = "https://github.com/ali-heidari/aion-rlt" }
+aixker-rlt = {  git = "https://github.com/ali-heidari/aixker-rlt" }
 aion-transporter = { git = "https://github.com/ali-heidari/aion-transporter" }
 aion-math = { git = "https://github.com/ali-heidari/aion-math" }
 log = "0.4.28"

@@ -3,8 +3,8 @@ mod mock;
 mod reward;
 mod get_mac_from_arp;
 
-use aion_rlt::CONFIG;
-use aion_rlt::node::Node;
+use aixker_rlt::CONFIG;
+use aixker_rlt::node::Node;
 use aion_transporter::multicast;
 use aion_transporter::quic::client;
 use anyhow::Context;
@@ -218,12 +218,13 @@ async fn start_predicting() -> Result<()> {
     let state = Arc::new(Mutex::new(dataset));
     let cloned_state = Arc::clone(&state);
 
-    aion_rlt::initialize(load_config().unwrap());
+    aixker_rlt::initialize(load_config().unwrap());
 
     Node::start(
         move |lowest_state| get_features(&mut cloned_state.lock().unwrap(), lowest_state),
-        |x, y| compute_reward_with_success(x, y as u8),
+        |x, y,c| compute_reward_with_success(x, y as u8),
         CONFIG.get().unwrap().mode,
+        "model-128.json"
     )
     .await;
 

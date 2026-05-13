@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use aion_rlt::configurations::Configurations;
+use aixker_rlt::configurations::Configurations;
 use config::{Config, Environment, File};
 
 pub fn load_config() -> Result<Arc<Configurations>, config::ConfigError> {
