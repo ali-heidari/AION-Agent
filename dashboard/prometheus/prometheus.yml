@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  # Aixker agents — one entry per node in your environment.
+  # Replace the targets with the actual IPs or hostnames of your agents.
+  - job_name: aixker-agents
+    static_configs:
+      - targets:
+          - "192.168.1.60:9090"
+          - "192.168.1.61:9090"
+          # add more agents here
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
