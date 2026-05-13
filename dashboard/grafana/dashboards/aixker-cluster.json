@@ -1,0 +1,118 @@
+{
+  "title": "Aixker Cluster",
+  "uid": "aixker-cluster",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "5s",
+  "time": { "from": "now-5m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Active Agents",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "options": { "colorMode": "background", "graphMode": "none" },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "count(up{job=\"aion-agents\"} == 1)",
+          "legendFormat": "agents"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Redirected Requests (total)",
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "options": { "colorMode": "background", "graphMode": "area" },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "sum(aixker_redirected_requests_total)",
+          "legendFormat": "redirected"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Locally Handled Requests (total)",
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "options": { "colorMode": "background", "graphMode": "area" },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "sum(aixker_local_requests_total)",
+          "legendFormat": "local"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Avg RL Inference Latency",
+      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "options": { "colorMode": "value", "graphMode": "none", "unit": "µs" },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "avg(aixker_inference_latency_microseconds)",
+          "legendFormat": "avg latency"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Routing Decisions per Agent",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "rate(aixker_redirected_requests_total[1m])",
+          "legendFormat": "redirect {{ instance }}"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "rate(aixker_local_requests_total[1m])",
+          "legendFormat": "local {{ instance }}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "gauge",
+      "title": "CPU Load per Agent",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "options": { "minValue": 0, "maxValue": 100, "unit": "percent" },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "aixker_cpu_load_percent",
+          "legendFormat": "{{ instance }}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Docker Container Metrics (via OTel)",
+      "gridPos": { "x": 0, "y": 12, "w": 24, "h": 8 },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "docker_container_cpu_usage_seconds_total",
+          "legendFormat": "{{ container_name }} CPU"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "docker_container_memory_usage_bytes",
+          "legendFormat": "{{ container_name }} Memory"
+        }
+      ]
+    }
+  ]
+}
