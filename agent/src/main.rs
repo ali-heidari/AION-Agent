@@ -2,7 +2,6 @@ mod configurations;
 mod mock;
 mod reward;
 mod get_mac_from_arp;
-mod telemetry;
 
 use aixker_rlt::CONFIG;
 use aixker_rlt::node::Node;
@@ -318,10 +317,8 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
     loop {
         {
             let agents = CACHE.read().unwrap();
-            telemetry::PEER_COUNT.set(agents.len() as i64);
 
             if busy || ME.lock().unwrap().state == 0 {
-                telemetry::AGENT_STATE.set(ME.lock().unwrap().state as i64);
                 for agent_borrowed in agents.iter() {
                     let agent = agent_borrowed.1.clone();
 
@@ -391,18 +388,6 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
     }
 }
 
-pub async fn start_metrics_server() {
-    use axum::{routing::get, Router};
-
-    let app = Router::new().route("/metrics", get(|| async {
-        crate::telemetry::metrics_text()
-    }));
-
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:9090").await.unwrap();
-    println!("Metrics server listening on :9090/metrics");
-    axum::serve(listener, app).await.unwrap();
-}
-
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
@@ -440,8 +425,6 @@ async fn main() -> Result<()> {
     tokio::spawn(async move {
         load_ebf(busy).await.expect("Can't load the ebpf!");
     });
-
-    tokio::spawn(start_metrics_server());
 
     tokio::signal::ctrl_c().await?;
     println!("Exiting...");
