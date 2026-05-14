@@ -1,5 +1,5 @@
 [package]
-name = "aion-agent"
+name = "aixker-agent"
 version = "0.1.0"
 edition = "2024"
 
@@ -21,5 +21,3 @@ aya = { git = "https://github.com/aya-rs/aya" }
 aya-log = { git = "https://github.com/aya-rs/aya" }
 nix = { version = "0.30.1", features = ["user", "net", "fs"] }
 mac_address = "1.1.8"
-axum = "0.7"
-prometheus = { version = "0.13", features = ["process"] }
