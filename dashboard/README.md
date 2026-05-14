@@ -107,11 +107,7 @@ On each machine that runs Docker containers, open `/etc/docker/daemon.json` (cre
 
 ```json
 {
-  "metrics-addr": "0.0.0.0:9323",
-  "opentelemetry": {
-    "endpoint": "http://<CONTROL_PLANE_IP>:9091/api/v1/otlp/v1/metrics",
-    "protocol": "http/protobuf"
-  }
+  "metrics-addr": "127.0.0.1:9323"
 }
 ```
 
