@@ -1,3 +1,3 @@
 [workspace]
-members = ["agent", "cli", "dashboard"]
+members = ["agent", "cli"]
 resolver = "2"
