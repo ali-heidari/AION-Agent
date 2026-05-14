@@ -15,5 +15,5 @@ for i in $(seq 0 $((count-1))); do
         --cpus=1 \
         --network=mymacvlan \
         --ip=192.168.1.$number \
-        aion-agent
+        aixker-agent
 done

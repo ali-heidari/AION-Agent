@@ -127,13 +127,11 @@ def disk_load():
         time.sleep(low_hold_time)  # Hold low disk for 20s
 
 if __name__ == "__main__":
-    # Start each load in a separate thread
     cpu_thread = threading.Thread(target=cpu_load, daemon=True)
-    memory_thread = threading.Thread(target=memory_load, daemon=True)
-    # disk_thread = threading.Thread(target=disk_load, daemon=True)
+    # memory_thread = threading.Thread(target=memory_load, daemon=True)  # disabled: exceeds 50MB container limit
 
     cpu_thread.start()
-    memory_thread.start()
+    # memory_thread.start()
 
     disk_file = "temp_disk_file.dat"
     # Ensure clean start
