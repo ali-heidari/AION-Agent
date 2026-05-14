@@ -1,59 +1,38 @@
 # Aixker Dashboard
 
-Observability stack for the Aixker cluster. Runs as a single master instance and provides a unified view across all N agents in the environment.
+Observability stack for the Aixker cluster. Runs as a single instance and provides a unified view of all containers in the environment.
 
 ## Architecture
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│           Control plane  (one instance, anywhere in network)     │
-│                                                                 │
-│   Prometheus (:9091)  ←  scrapes all agents + receives OTel    │
-│   Grafana    (:3000)  ←  queries Prometheus, renders panels     │
-└────────────────────────────┬────────────────────────────────────┘
-                             │
-          ┌──────────────────┼──────────────────┐
-          │                  │                  │
-          ▼                  ▼                  ▼
-┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
-│   Machine 1     │ │   Machine 2     │ │   Machine N     │
-│                 │ │                 │ │                 │
-│  Aixker agent   │ │  Aixker agent   │ │  Aixker agent   │
-│  (kernel/XDP)   │ │  (kernel/XDP)   │ │  (kernel/XDP)   │
-│  :9090/metrics  │ │  :9090/metrics  │ │  :9090/metrics  │
-│                 │ │                 │ │                 │
-│  Docker daemon  │ │  Docker daemon  │ │  Docker daemon  │
-│  (built-in OTel)│ │  (built-in OTel)│ │  (built-in OTel)│
-│  OTLP push ─────┼─┼─────────────────┼─┼──▶ Prometheus   │
-└─────────────────┘ └─────────────────┘ └─────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│         Control plane  (one instance, anywhere in network)    │
+│                                                              │
+│   cAdvisor   (:8080)  ←  reads Docker cgroups directly      │
+│   Prometheus (:9091)  ←  scrapes cAdvisor                   │
+│   Grafana    (:3000)  ←  queries Prometheus, renders panels  │
+└──────────────────────────────────────────────────────────────┘
 ```
+
+The Aixker agent runs inside the Linux kernel via eBPF/XDP on each machine. It makes microsecond-scale routing decisions before the OS network stack processes any packet. It exposes no web server and listens on no port — it is invisible to user space.
 
 ## Node roles
 
-### Aixker agent (one per machine)
+### cAdvisor
 
-Runs inside the Linux kernel via eBPF/XDP. It intercepts raw packets before the OS network stack processes them. It reads machine metrics (CPU, memory, network load), feeds them into the embedded RL model (<5 KB), and in microseconds decides whether this node handles the request or redirects it to a neighbor. Agents communicate with each other via multicast gossip to share load state. The application in user space is never aware.
+Reads container resource usage directly from Docker's cgroups on the host — no instrumentation inside containers needed. Exposes per-container CPU, memory, network, and filesystem metrics in Prometheus format on `:8080`.
 
-Exposes Prometheus metrics at `http://<node-ip>:9090/metrics`. Prometheus scrapes this endpoint every 5 seconds.
+### Prometheus
 
-### Docker daemon (built-in OTel, one per machine)
+Scrapes cAdvisor on a 5-second interval and stores the time-series data. Answers PromQL queries from Grafana.
 
-Since Docker Engine 25.x, the Docker daemon has a built-in OpenTelemetry exporter. It pushes container-level metrics (CPU usage, memory, network I/O per container) via OTLP directly to Prometheus, which accepts OTLP natively since version 2.47. No sidecar or separate collector process is needed.
+Port: `9091` (host) → `9090` (container)
 
-Pushes to `http://<control-plane-ip>:9091/api/v1/otlp/v1/metrics`.
+### Grafana
 
-### Prometheus (one instance)
+Queries Prometheus and renders the container dashboard. Pre-provisioned with the **Aixker Cluster** dashboard — no manual configuration needed after startup.
 
-The central time-series database. It has two ingest paths:
-
-- **Pull** — scrapes each Aixker agent's `:9090/metrics` endpoint on a 5-second interval
-- **Push** — receives OTLP from each Docker daemon via `--web.enable-otlp-receiver`
-
-Both data sources are stored in the same database and queryable together in Grafana.
-
-### Grafana (one instance)
-
-Queries Prometheus and renders the cluster dashboard. Pre-provisioned with the Aixker Cluster dashboard showing active agent count, routing decisions per node, CPU load gauges, RL inference latency, and Docker container metrics. No manual configuration needed after startup.
+Port: `3000`
 
 ---
 
@@ -61,25 +40,10 @@ Queries Prometheus and renders the cluster dashboard. Pre-provisioned with the A
 
 ### 1. Prerequisites
 
-- Docker Engine 25.x or later with Docker Compose v2
-- Machines running the Aixker agent must be reachable on port `9090` from the control plane
-- Machines running Docker must be able to reach the control plane on port `9091`
+- Docker Engine 25.x or later
+- Docker Compose v2
 
-### 2. Configure agent targets
-
-Edit [`prometheus/prometheus.yml`](prometheus/prometheus.yml) and replace the placeholder values with your actual agent IPs:
-
-```yaml
-static_configs:
-  - targets:
-      - "192.168.1.10:9090"
-      - "192.168.1.11:9090"
-      - "192.168.1.12:9090"
-```
-
-Add one entry per machine running an Aixker agent.
-
-### 3. Start the stack
+### 2. Start the stack
 
 From the `dashboard/` directory:
 
@@ -87,45 +51,15 @@ From the `dashboard/` directory:
 docker compose up -d
 ```
 
-### 4. Open Grafana
+This starts Prometheus, Grafana, and cAdvisor together.
+
+### 3. Open Grafana
 
 Navigate to `http://localhost:3000`.
 
 Default credentials: `admin` / `admin`. Change the password on first login.
 
 The **Aixker Cluster** dashboard loads automatically.
-
----
-
-## Configuring Docker's built-in OpenTelemetry
-
-Docker 25.x ships with a built-in OTel exporter in the daemon. No extra process is needed — just configure `/etc/docker/daemon.json` on each machine and restart Docker.
-
-### Step 1 — Edit daemon config
-
-On each machine that runs Docker containers, open `/etc/docker/daemon.json` (create it if it does not exist):
-
-```json
-{
-  "metrics-addr": "127.0.0.1:9323"
-}
-```
-
-Replace `<CONTROL_PLANE_IP>` with the IP or hostname of the machine running this dashboard stack.
-
-### Step 2 — Restart Docker
-
-```bash
-sudo systemctl restart docker
-```
-
-### Step 3 — Verify
-
-Docker container metrics will appear in Grafana's **Docker Container Metrics** panel within one scrape cycle. You can also verify by querying Prometheus directly:
-
-```text
-http://localhost:9091/api/v1/query?query=docker_container_cpu_usage_seconds_total
-```
 
 ---
 
@@ -143,15 +77,30 @@ docker compose down -v
 
 ---
 
+## Dashboard panels
+
+| Panel | Description |
+| ----- | ----------- |
+| Running Containers | Count of active containers |
+| Total CPU Usage | Aggregate CPU % across all containers |
+| Total Memory Usage | Aggregate working set memory |
+| Total Network RX / TX | Aggregate throughput |
+| CPU Usage per Container | Time series per container |
+| Memory Usage per Container | Working set per container |
+| Memory Limit per Container | Configured limit per container |
+| Network RX / TX per Container | Per-container throughput |
+| Filesystem Usage per Container | Disk used per container |
+| Container Overview | Sortable table — CPU% and memory snapshot |
+
 ## Metric reference
 
-Metrics emitted by each Aixker agent:
+Metrics are emitted by cAdvisor using the `container_` prefix. System cgroups are filtered out — only containers with a Docker image appear in the dashboard.
 
 | Metric | Type | Description |
 | ------ | ---- | ----------- |
-| `aixker_redirected_requests_total` | counter | Requests redirected to a neighbor node |
-| `aixker_local_requests_total` | counter | Requests handled locally on this node |
-| `aixker_inference_latency_microseconds` | gauge | RL model inference time in microseconds |
-| `aixker_cpu_load_percent` | gauge | Current CPU load on this node |
-
-If metric names differ in your build, update the PromQL expressions in [`grafana/dashboards/aixker-cluster.json`](grafana/dashboards/aixker-cluster.json).
+| `container_cpu_usage_seconds_total` | counter | Cumulative CPU time consumed |
+| `container_memory_working_set_bytes` | gauge | Current working set memory |
+| `container_spec_memory_limit_bytes` | gauge | Configured memory limit |
+| `container_network_receive_bytes_total` | counter | Cumulative network bytes received |
+| `container_network_transmit_bytes_total` | counter | Cumulative network bytes transmitted |
+| `container_fs_usage_bytes` | gauge | Filesystem bytes consumed |
