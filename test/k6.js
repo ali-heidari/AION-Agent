@@ -1,5 +1,5 @@
 import http from "k6/http";
-import { check } from "k6";
+import { check, sleep } from "k6";
 import { scenario } from 'k6/execution';
 
 const TARGET_IPS = [];
@@ -48,4 +48,6 @@ export default function () {
         "status 200": (r) => r.status === 200,
         [`active nodes: ${targetGroup.length}`]: true,
     });
+
+    sleep(1);
 }
