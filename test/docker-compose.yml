@@ -1,0 +1,89 @@
+name: aixker-no_agent
+
+x-mock: &mock
+  image: python:3-alpine
+  command: sh -c "python3 /mock.py & python3 -m http.server 8123 --bind 0.0.0.0"
+  volumes:
+    - ../agent/scripts/mock-for-small-container.py:/mock.py:ro
+
+services:
+  mock-60:
+    <<: *mock
+    networks:
+      mymacvlan:
+        ipv4_address: 192.168.1.60
+
+  mock-61:
+    <<: *mock
+    networks:
+      mymacvlan:
+        ipv4_address: 192.168.1.61
+
+  mock-62:
+    <<: *mock
+    networks:
+      mymacvlan:
+        ipv4_address: 192.168.1.62
+
+  mock-63:
+    <<: *mock
+    networks:
+      mymacvlan:
+        ipv4_address: 192.168.1.63
+
+  mock-64:
+    <<: *mock
+    networks:
+      mymacvlan:
+        ipv4_address: 192.168.1.64
+
+  mock-65:
+    <<: *mock
+    networks:
+      mymacvlan:
+        ipv4_address: 192.168.1.65
+
+  mock-66:
+    <<: *mock
+    networks:
+      mymacvlan:
+        ipv4_address: 192.168.1.66
+
+  mock-67:
+    <<: *mock
+    networks:
+      mymacvlan:
+        ipv4_address: 192.168.1.67
+
+  mock-68:
+    <<: *mock
+    networks:
+      mymacvlan:
+        ipv4_address: 192.168.1.68
+
+  mock-69:
+    <<: *mock
+    networks:
+      mymacvlan:
+        ipv4_address: 192.168.1.69
+
+
+  haproxy:
+    image: haproxy:3.1-alpine
+    volumes:
+      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    networks:
+      mymacvlan:
+        ipv4_address: 192.168.1.80
+
+  nginx:
+    image: nginx:alpine
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      mymacvlan:
+        ipv4_address: 192.168.1.81
+
+networks:
+  mymacvlan:
+    external: true
