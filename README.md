@@ -20,6 +20,14 @@ cargo build --release
 CERT_PATH=./certificates/cert.pem KEY_PATH=./certificates/key.pem RUST_LOG=info cargo run -- metrics
 ```
 
+### Test - benchmark - monitoring
+
+For running 10 containers and monitoring, you can use this command from the root:
+
+```bash
+sudo docker compose -f  dashboard/docker-compose.yml -f agent/docker-compose.yml up -d
+```
+
 ## Documentation
 
 See [`docs/index.md`](docs/index.md) for the full documentation index.
