@@ -1,0 +1,4 @@
+include:
+  - dashboard/docker-compose.yml
+  - agent/docker-compose.yml
+  # - test/docker-compose.yml
