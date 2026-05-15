@@ -8,7 +8,11 @@ x-agent: &agent
   cap_add:
     - NET_ADMIN
     - SYS_ADMIN
-  mem_limit: 50m
+    - BPF
+    - PERFMON
+  security_opt:
+    - seccomp:unconfined
+  mem_limit: 128m
   cpus: 1.0
   restart: unless-stopped
 
@@ -18,7 +22,6 @@ services:
     networks:
       mymacvlan:
         ipv4_address: 192.168.1.60
-
   APy61:
     <<: *agent
     networks:
@@ -30,43 +33,36 @@ services:
     networks:
       mymacvlan:
         ipv4_address: 192.168.1.62
-
   APy63:
     <<: *agent
     networks:
       mymacvlan:
         ipv4_address: 192.168.1.63
-
   APy64:
     <<: *agent
     networks:
       mymacvlan:
         ipv4_address: 192.168.1.64
-
   APy65:
     <<: *agent
     networks:
       mymacvlan:
         ipv4_address: 192.168.1.65
-
   APy66:
     <<: *agent
     networks:
       mymacvlan:
         ipv4_address: 192.168.1.66
-
   APy67:
     <<: *agent
     networks:
       mymacvlan:
         ipv4_address: 192.168.1.67
-
   APy68:
     <<: *agent
     networks:
       mymacvlan:
         ipv4_address: 192.168.1.68
-
   APy69:
     <<: *agent
     networks:

@@ -390,7 +390,9 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    println!("Let's begin...");
     env_logger::init();
+    println!("Log initialized...!");
 
     let mut busy = false;
 
@@ -405,6 +407,7 @@ async fn main() -> Result<()> {
             busy = true;
         }
     }
+    println!("Quic initializing...");
 
     aion_transporter::quic::init();
 
@@ -426,7 +429,10 @@ async fn main() -> Result<()> {
         load_ebf(busy).await.expect("Can't load the ebpf!");
     });
 
-    tokio::signal::ctrl_c().await?;
+    tokio::select! {
+        _ = tokio::signal::ctrl_c() => {},
+        _ = std::future::pending::<()>() => {},
+    }
     println!("Exiting...");
     Ok(())
 }

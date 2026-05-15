@@ -13,18 +13,20 @@ RUN cargo build --release
 
 FROM debian:bookworm-slim
 
+WORKDIR /app
+
 RUN apt-get update && apt-get install -y ca-certificates python3 iproute2 iputils-ping sudo procps && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/target/release/aixker-agent /usr/local/bin/aixker-agent
-COPY --from=builder /app/certificates /certificates
+COPY --from=builder /app/target/release/aixker-agent ./aixker-agent
+COPY --from=builder /app/certificates ./certificates
 COPY ./models/model-128.json ./
 COPY ./config.toml ./
-COPY ./src/libebpf.so /usr/local/lib/libebpf.so
-COPY ./scripts/mock-for-small-container.py /usr/local/bin/mock.py
+COPY ./src/libebpf.so ./libebpf.so
+COPY ./scripts/mock-for-small-container.py ./mock.py
 COPY ./scripts/arp /arp
 
-ENV CERT_PATH="/certificates/cert.pem" KEY_PATH="/certificates/key.pem"
-ENV LIBEBPF_PATH=/usr/local/lib/libebpf.so
+ENV CERT_PATH="./certificates/cert.pem" KEY_PATH="./certificates/key.pem"
+ENV LIBEBPF_PATH=./libebpf.so
 # ENV RUST_LOG=info
 
-ENTRYPOINT ["sh", "-c", "/usr/local/bin/aixker-agent & python3 /usr/local/bin/mock.py & python3 -m http.server 8123 --bind 0.0.0.0"]
+CMD ["sh", "-c", "sudo ./aixker-agent & python3 ./mock.py & python3 -m http.server 8123 --bind 0.0.0.0"]
