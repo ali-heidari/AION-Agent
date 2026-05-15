@@ -3,11 +3,12 @@ import threading
 import time
 import gc
 import os
+import random
 
-ram_up_time = 3  # Time to ramp up resource usage in seconds
-hold_time = 30    # Time to hold high resource usage in seconds
-release_time = 1.5 # Time to release resource usage in seconds
-low_hold_time = 30 # Time to hold low resource usage in seconds
+ram_up_time = random.uniform(1, 10)
+hold_time = random.uniform(20, 60)
+release_time = random.uniform(1, 10)
+low_hold_time = random.uniform(20, 60)
 
 import time
 
@@ -68,8 +69,8 @@ def cpu_load():
         time.sleep(low_hold_time*2)  # Hold low CPU for 15s
 
 def memory_load():
-    chunk_size_mb = 100  # Memory chunk size in MB
-    num_chunks = 70 # Number of memory chunks
+    chunk_size_mb =  5  # Memory chunk size in MB
+    num_chunks = 9 # Number of memory chunks
     while True:
         print("Memory: Ramping up...")
         mem_chunks = []
@@ -127,10 +128,8 @@ def disk_load():
         time.sleep(low_hold_time)  # Hold low disk for 20s
 
 if __name__ == "__main__":
-    # Start each load in a separate thread
     cpu_thread = threading.Thread(target=cpu_load, daemon=True)
-    memory_thread = threading.Thread(target=memory_load, daemon=True)
-    # disk_thread = threading.Thread(target=disk_load, daemon=True)
+    memory_thread = threading.Thread(target=memory_load, daemon=True)  # disabled: exceeds 50MB container limit
 
     cpu_thread.start()
     memory_thread.start()
