@@ -10,6 +10,7 @@ x-agent: &agent
     - SYS_ADMIN
   mem_limit: 50m
   cpus: 1.0
+  restart: unless-stopped
 
 services:
   APy60:
