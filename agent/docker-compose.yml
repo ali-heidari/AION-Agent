@@ -1,0 +1,77 @@
+name: aixker-agents
+
+x-agent: &agent
+  image: aixker-agent
+  build:
+    context: .
+    dockerfile: dockerfile
+  cap_add:
+    - NET_ADMIN
+    - SYS_ADMIN
+  mem_limit: 50m
+  cpus: 1.0
+
+services:
+  agent-60:
+    <<: *agent
+    networks:
+      mymacvlan:
+        ipv4_address: 192.168.1.60
+
+  agent-61:
+    <<: *agent
+    networks:
+      mymacvlan:
+        ipv4_address: 192.168.1.61
+
+  agent-62:
+    <<: *agent
+    networks:
+      mymacvlan:
+        ipv4_address: 192.168.1.62
+
+  agent-63:
+    <<: *agent
+    networks:
+      mymacvlan:
+        ipv4_address: 192.168.1.63
+
+  agent-64:
+    <<: *agent
+    networks:
+      mymacvlan:
+        ipv4_address: 192.168.1.64
+
+  agent-65:
+    <<: *agent
+    networks:
+      mymacvlan:
+        ipv4_address: 192.168.1.65
+
+  agent-66:
+    <<: *agent
+    networks:
+      mymacvlan:
+        ipv4_address: 192.168.1.66
+
+  agent-67:
+    <<: *agent
+    networks:
+      mymacvlan:
+        ipv4_address: 192.168.1.67
+
+  agent-68:
+    <<: *agent
+    networks:
+      mymacvlan:
+        ipv4_address: 192.168.1.68
+
+  agent-69:
+    <<: *agent
+    networks:
+      mymacvlan:
+        ipv4_address: 192.168.1.69
+
+networks:
+  mymacvlan:
+    external: true

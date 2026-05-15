@@ -1,4 +1,4 @@
-# AION-Agent
+# aixker-Agent
 
 A distributed, ML-driven network orchestration system written in Rust. Part of **Aixker** — a kernel-level RL-driven load routing system for Linux nodes.
 
@@ -29,8 +29,8 @@ This project follows the `ai-agent-standards` repository as the base guidance. S
 Clone the repository:
 
 ```bash
-git clone https://github.com/yourusername/AION-Agent.git
-cd AION-Agent
+git clone https://github.com/yourusername/aixker-Agent.git
+cd aixker-Agent
 ```
 
 ## Build
@@ -60,13 +60,13 @@ CERT_PATH=./certificates/cert.pem KEY_PATH=./certificates/key.pem RUST_LOG=info 
 Build the Docker image:
 
 ```bash
-sudo docker build -t aion-agent .
+sudo docker build -t aixker-agent .
 ```
 
 Run the container:
 
 ```bash
-sudo docker run -it --name aaa --cap-add=NET_ADMIN --cap-add=SYS_ADMIN --memory=50M --cpus=1 aion-agent -- busy
+sudo docker run -it --name aaa --cap-add=NET_ADMIN --cap-add=SYS_ADMIN --memory=50M --cpus=1 aixker-agent -- busy
 ```
 
 Monitor Docker network:
@@ -92,7 +92,42 @@ sudo ip link set dev host_link up
 Run container with macvlan network:
 
 ```bash
-sudo docker run -it --name lll --cap-add=NET_ADMIN --cap-add=SYS_ADMIN --memory=50M --cpus=1 --network=mymacvlan --ip=192.168.1.70 aion-agent
+sudo docker run -it --name lll --cap-add=NET_ADMIN --cap-add=SYS_ADMIN --memory=50M --cpus=1 --network=mymacvlan --ip=192.168.1.70 aixker-agent
+```
+
+### Docker Compose
+
+`docker-compose.yml` launches 10 agents with static IPs `192.168.1.60–69` on the `mymacvlan` network. Create the macvlan network first (see above) if it doesn't exist.
+
+Build the image:
+
+```bash
+docker compose build
+```
+
+Start all agents:
+
+```bash
+docker compose up -d
+```
+
+Start a single agent:
+
+```bash
+docker compose up -d agent-60
+```
+
+Stop and remove all containers:
+
+```bash
+docker compose down
+```
+
+View logs:
+
+```bash
+docker compose logs -f
+docker compose logs -f agent-60
 ```
 
 ## Configuration
@@ -111,7 +146,7 @@ Configuration is loaded from `config.toml` with environment variable overrides.
 ## Architecture
 
 - **Distributed agent discovery**: Multicast-based peer discovery
-- **ML inference engine**: Uses aion-rlt library for RL predictions
+- **ML inference engine**: Uses aixker-rlt library for RL predictions
 - **Kernel networking**: eBPF XDP program for packet redirection
 - **Async runtime**: Tokio-based task orchestration
 - **Decentralized routing**: Gossip protocol for state dissemination
