@@ -3,69 +3,71 @@ name: aixker-no_agent
 x-mock: &mock
   image: python:3-alpine
   command: sh -c "python3 /mock.py & python3 -m http.server 8123 --bind 0.0.0.0"
+  mem_limit: 128m
+  cpus: 1.0
   volumes:
-    - ../agent/scripts/mock-for-small-container.py:/mock.py:ro
+    - ../agent/scripts/mock.py:/mock.py:ro
 
 services:
-  mock-60:
+  mock-70:
     <<: *mock
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.60
+        ipv4_address: 192.168.1.70
 
-  mock-61:
+  mock-71:
     <<: *mock
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.61
+        ipv4_address: 192.168.1.71
 
-  mock-62:
+  mock-72:
     <<: *mock
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.62
+        ipv4_address: 192.168.1.72
 
-  mock-63:
+  mock-73:
     <<: *mock
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.63
+        ipv4_address: 192.168.1.73
 
-  mock-64:
+  mock-74:
     <<: *mock
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.64
+        ipv4_address: 192.168.1.74
 
-  mock-65:
+  mock-75:
     <<: *mock
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.65
+        ipv4_address: 192.168.1.75
 
-  mock-66:
+  mock-76:
     <<: *mock
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.66
+        ipv4_address: 192.168.1.76
 
-  mock-67:
+  mock-77:
     <<: *mock
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.67
+        ipv4_address: 192.168.1.77
 
-  mock-68:
+  mock-78:
     <<: *mock
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.68
+        ipv4_address: 192.168.1.78
 
-  mock-69:
+  mock-79:
     <<: *mock
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.69
+        ipv4_address: 192.168.1.79
 
 
   haproxy:

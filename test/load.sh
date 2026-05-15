@@ -13,7 +13,7 @@ if [ ! -f "$MOCK_FILE" ]; then
     exit 1
 fi
 
-CONTAINERS=$(docker ps --filter "ancestor=aixker-agent" --format "{{.Names}}")
+CONTAINERS=$(docker ps --filter "ancestor=python:3-alpine" --format "{{.Names}}")
 
 if [ -z "$CONTAINERS" ]; then
     echo "No running aixker-agent containers found."
@@ -29,12 +29,12 @@ if [ "$1" == "--stop" ]; then
     exit 0
 fi
 
-for container in $CONTAINERS[0..8]; do
+for container in $CONTAINERS[1,8]; do
     echo "Injecting into: $container"
     docker cp "$MOCK_FILE" "$container:/usr/local/bin/mock.py"
     docker restart "$container"  # Restart to ensure the new mock.py is used
     docker exec -d "$container" python3 /usr/local/bin/mock.py
-    sleep 5
+    sleep random
 done
 
 echo ""
