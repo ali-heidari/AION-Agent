@@ -69,7 +69,7 @@ def cpu_load():
 
 def memory_load():
     chunk_size_mb =  5  # Memory chunk size in MB
-    num_chunks = 20 # Number of memory chunks
+    num_chunks = 9 # Number of memory chunks
     while True:
         print("Memory: Ramping up...")
         mem_chunks = []
@@ -128,10 +128,10 @@ def disk_load():
 
 if __name__ == "__main__":
     cpu_thread = threading.Thread(target=cpu_load, daemon=True)
-    # memory_thread = threading.Thread(target=memory_load, daemon=True)  # disabled: exceeds 50MB container limit
+    memory_thread = threading.Thread(target=memory_load, daemon=True)  # disabled: exceeds 50MB container limit
 
     cpu_thread.start()
-    # memory_thread.start()
+    memory_thread.start()
 
     disk_file = "temp_disk_file.dat"
     # Ensure clean start
