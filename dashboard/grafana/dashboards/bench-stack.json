@@ -1,0 +1,193 @@
+{
+  "title": "Bench Stack — Mock Containers",
+  "uid": "bench-stack",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Running Mock Containers",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "options": { "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "red", "value": 0 }, { "color": "green", "value": 1 }] } } },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "count(count(container_last_seen{name=~\"aixker-bench-mock-.*\"}) by (name))",
+          "legendFormat": "mock containers"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Total Network RX — Bench",
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "options": { "colorMode": "value", "graphMode": "area" },
+      "fieldConfig": { "defaults": { "unit": "Bps" } },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "sum(rate(container_network_receive_bytes_total{name=~\"aixker-bench-.*\"}[1m]))",
+          "legendFormat": "RX"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Total Network TX — Bench",
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "options": { "colorMode": "value", "graphMode": "area" },
+      "fieldConfig": { "defaults": { "unit": "Bps" } },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "sum(rate(container_network_transmit_bytes_total{name=~\"aixker-bench-.*\"}[1m]))",
+          "legendFormat": "TX"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Total CPU — Bench",
+      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "options": { "colorMode": "background", "graphMode": "area" },
+      "fieldConfig": { "defaults": { "unit": "percent", "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "green", "value": 0 }, { "color": "orange", "value": 70 }, { "color": "red", "value": 90 }] } } },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "sum(rate(container_cpu_usage_seconds_total{name=~\"aixker-bench-.*\"}[1m])) * 100",
+          "legendFormat": "CPU %"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Total Memory — Bench",
+      "gridPos": { "x": 16, "y": 0, "w": 4, "h": 4 },
+      "options": { "colorMode": "background", "graphMode": "area" },
+      "fieldConfig": { "defaults": { "unit": "bytes", "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "green", "value": 0 }, { "color": "orange", "value": 536870912 }, { "color": "red", "value": 1073741824 }] } } },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "sum(container_memory_working_set_bytes{name=~\"aixker-bench-.*\"})",
+          "legendFormat": "Memory"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Network RX per Container — traffic arriving from nginx / haproxy",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "fieldConfig": { "defaults": { "unit": "Bps", "color": { "mode": "palette-classic" } } },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "rate(container_network_receive_bytes_total{name=~\"aixker-bench-mock-.*\"}[1m])",
+          "legendFormat": "{{ name }}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Network TX per Container — responses sent back",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "fieldConfig": { "defaults": { "unit": "Bps", "color": { "mode": "palette-classic" } } },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "rate(container_network_transmit_bytes_total{name=~\"aixker-bench-mock-.*\"}[1m])",
+          "legendFormat": "{{ name }}"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Nginx & HAProxy — Network RX (requests in)",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "fieldConfig": { "defaults": { "unit": "Bps", "color": { "mode": "palette-classic" } } },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "rate(container_network_receive_bytes_total{name=~\"aixker-bench-(nginx|haproxy)-.*\"}[1m])",
+          "legendFormat": "{{ name }}"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "CPU Usage per Container",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "fieldConfig": { "defaults": { "unit": "percent", "color": { "mode": "palette-classic" } } },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "rate(container_cpu_usage_seconds_total{name=~\"aixker-bench-.*\"}[1m]) * 100",
+          "legendFormat": "{{ name }}"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Container Overview",
+      "gridPos": { "x": 0, "y": 20, "w": 24, "h": 8 },
+      "options": { "sortBy": [{ "displayName": "RX (Bps)", "desc": true }] },
+      "fieldConfig": { "defaults": { "custom": { "align": "auto" } } },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "rate(container_network_receive_bytes_total{name=~\"aixker-bench-.*\"}[1m])",
+          "legendFormat": "{{ name }}",
+          "instant": true,
+          "refId": "RX"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "rate(container_cpu_usage_seconds_total{name=~\"aixker-bench-.*\"}[1m]) * 100",
+          "legendFormat": "{{ name }}",
+          "instant": true,
+          "refId": "CPU"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "container_memory_working_set_bytes{name=~\"aixker-bench-.*\"}",
+          "legendFormat": "{{ name }}",
+          "instant": true,
+          "refId": "MEM"
+        }
+      ],
+      "transformations": [
+        { "id": "merge", "options": {} },
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "Value #RX":  "RX (Bps)",
+              "Value #CPU": "CPU %",
+              "Value #MEM": "Memory"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "tags": ["bench", "mock", "nginx", "haproxy"],
+  "annotations": { "list": [] },
+  "templating": { "list": [] },
+  "links": []
+}
