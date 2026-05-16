@@ -23,10 +23,11 @@ COPY ./models/model-128.json ./
 COPY ./config.toml ./
 COPY ./src/libebpf.so ./libebpf.so
 COPY ./scripts/mock.py ./mock.py
+COPY ./scripts/server.py ./server.py
 COPY ./scripts/arp /arp
 
 ENV CERT_PATH="./certificates/cert.pem" KEY_PATH="./certificates/key.pem"
 ENV LIBEBPF_PATH=./libebpf.so
 # ENV RUST_LOG=info
 
-CMD ["sh", "-c", "sudo ./aixker-agent & python3 ./mock.py & python3 -m http.server 8123 --bind 0.0.0.0"]
+CMD ["sh", "-c", "sudo ./aixker-agent & python3 ./mock.py & python3 ./server.py"]
