@@ -19,6 +19,7 @@ use std::sync::RwLock;
 use std::sync::{Arc, Mutex};
 
 use crate::configurations::load_config;
+use crate::get_mac_from_arp::get_mac_from_arp;
 use crate::mock::{DatasetMode, SyntheticState};
 use crate::reward::compute_reward_with_success;
 
@@ -313,11 +314,16 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
     let local_ip: u32 = ip.to_string().parse::<Ipv4Addr>().unwrap().into();
     let local_mac: [u8; 6] = mac_address::get_mac_address().unwrap().unwrap().bytes();
     loop {
+        let mut mac_to_update: Option<(String, [u8; 6])> = None;
+
         {
             let agents = CACHE.read().unwrap();
 
             if busy || ME.lock().unwrap().state == 0 {
-                for agent_borrowed in agents.iter().filter(|x| x.0 != ip.to_string().as_str() && x.1.state != 0) {
+                for agent_borrowed in agents
+                    .iter()
+                    .filter(|x| x.0 != ip.to_string().as_str() && x.1.state == 2)
+                {
                     let agent = agent_borrowed.1.clone();
 
                     let default_interface_output = std::process::Command::new("ping")
@@ -333,7 +339,7 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
                         continue;
                     }
 
-                    if agent.state == 2 || agent.state == 1 {
+                    if agent.state == 2{
                         println!(">>>>>>>>>>>>>>>>>>>>>>>>>>>> {}", agent.stringify());
                         let ipv4_addr: Ipv4Addr = agent.identifier.parse().unwrap();
 
@@ -348,7 +354,16 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
                         for b in ip_as_u32.to_be_bytes() {
                             bytes.push(b);
                         }
-                        let target_mac: [u8; 6] = agent.mac;
+                        let target_mac: [u8; 6] = if agent.mac != [0u8; 6] {
+                            agent.mac
+                        } else if let Some(mac) = get_mac_from_arp(ipv4_addr) {
+                            mac_to_update = Some((agent.identifier.clone(), mac.0));
+                            mac.0
+                        } else {
+                            println!("Failed to resolve MAC for {}, skipping", agent.identifier);
+                            continue;
+                        };
+
                         for b in target_mac {
                             bytes.push(b);
                         }
@@ -373,6 +388,13 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
             }
 
             found_agent = false;
+        }
+
+        if let Some((id, mac)) = mac_to_update {
+            let mut cache = CACHE.write().unwrap();
+            if let Some(cached) = cache.get_mut(&id) {
+                cached.mac = mac;
+            }
         }
 
         tokio::time::sleep(tokio::time::Duration::from_secs(
