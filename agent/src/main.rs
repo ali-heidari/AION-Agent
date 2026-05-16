@@ -1,12 +1,12 @@
 mod configurations;
+mod get_mac_from_arp;
 mod mock;
 mod reward;
-mod get_mac_from_arp;
 
-use aixker_rlt::CONFIG;
-use aixker_rlt::node::Node;
 use aion_transporter::multicast;
 use aion_transporter::quic::client;
+use aixker_rlt::CONFIG;
+use aixker_rlt::node::Node;
 use anyhow::Context;
 use anyhow::{Ok, Result};
 use aya::Pod;
@@ -81,7 +81,7 @@ impl Agent {
                 Agent::new(identifier, mac, state)
             };
 
-            if agent.update_time - update_time > 10 {
+            if update_time - agent.update_time > 10 {
                 cache.remove(identifier);
                 return agent;
             }
@@ -112,25 +112,6 @@ fn add_agents(details: &str, separator: char) {
     for agent in agents {
         Agent::parse(agent);
     }
-}
-
-async fn on_data_received(address: SocketAddr, data: &[u8]) {
-    let message = String::from_utf8(data.to_vec()).unwrap();
-    println!("message came from {} says: {:?}", address.ip(), message);
-    if message.contains('=') {
-        {
-            let mut cache = CACHE.write().unwrap();
-            cache.remove(message.split('=').next().unwrap());
-            return;
-        }
-    }
-    if message.contains("[over]") {
-        return;
-    }
-
-    add_agents(&message, '|');
-
-    // represent(2).await;
 }
 
 pub async fn represent(action: u8) {
@@ -166,6 +147,23 @@ pub async fn represent(action: u8) {
             }
         }
     }
+}
+
+async fn on_data_received(address: SocketAddr, data: &[u8]) {
+    let message = String::from_utf8(data.to_vec()).unwrap();
+    println!("[MULTICAST] {}= {:?}", address.ip(), message);
+    if message.contains('=') {
+        {
+            let mut cache = CACHE.write().unwrap();
+            cache.remove(message.split('=').next().unwrap());
+            return;
+        }
+    }
+    if message.contains("[over]") {
+        return;
+    }
+
+    add_agents(&message, '|');
 }
 
 async fn listen_to_agents() {
@@ -222,9 +220,9 @@ async fn start_predicting() -> Result<()> {
 
     Node::start(
         move |lowest_state| get_features(&mut cloned_state.lock().unwrap(), lowest_state),
-        |x, y,c| compute_reward_with_success(x, y as u8),
+        |x, y, c| compute_reward_with_success(x, y as u8),
         CONFIG.get().unwrap().mode,
-        "model-128.json"
+        "model-128.json",
     )
     .await;
 
@@ -319,7 +317,7 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
             let agents = CACHE.read().unwrap();
 
             if busy || ME.lock().unwrap().state == 0 {
-                for agent_borrowed in agents.iter() {
+                for agent_borrowed in agents.iter().filter(|x| x.0 != ip.to_string().as_str() && x.1.state != 0) {
                     let agent = agent_borrowed.1.clone();
 
                     let default_interface_output = std::process::Command::new("ping")
@@ -336,7 +334,7 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
                     }
 
                     if agent.state == 2 || agent.state == 1 {
-                        println!(">>>>>>>>> {}", agent.stringify());
+                        println!(">>>>>>>>>>>>>>>>>>>>>>>>>>>> {}", agent.stringify());
                         let ipv4_addr: Ipv4Addr = agent.identifier.parse().unwrap();
 
                         let ip_as_u32: u32 = ipv4_addr.into();
@@ -351,12 +349,6 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
                             bytes.push(b);
                         }
                         let target_mac: [u8; 6] = agent.mac;
-                        // if let Some(val) = get_mac_from_arp(ipv4_addr) {
-                        //     val.0
-                        // } else {
-                        //     println!("Failed to parse target MAC: {:?}", ipv4_addr);
-                        //     continue;
-                        // };
                         for b in target_mac {
                             bytes.push(b);
                         }
@@ -373,6 +365,8 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
                     }
                 }
             }
+
+            println!("server_map: {:?}", server_map.iter().collect::<Vec<_>>());
 
             if !found_agent && let core::result::Result::Ok(_) = server_map.remove(&0) {
                 println!("No suitable agent found, clearing server map");
@@ -407,24 +401,16 @@ async fn main() -> Result<()> {
             busy = true;
         }
     }
-    println!("Quic initializing...");
-
-    aion_transporter::quic::init();
+    println!("Listening to multicast packets!");
+    listen_to_agents().await;
 
     println!("Broadcasting hello!");
     send_hello(2, true).await;
-    println!("Listening to multicast packets!");
-    listen_to_agents().await;
+
     println!("Start AI");
     start_ai();
-    // println!("Running quic server!");
-    // task::spawn(async {
-    //     if let Err(e) = start_quic(4433, on_message_received).await {
-    //         println!("Error while starting QUIC server: {:?}", e);
-    //     }
-    // });
-    println!("Load ebpf - XDP Program [busy={}]", busy);
 
+    println!("Load ebpf - XDP Program [busy={}]", busy);
     tokio::spawn(async move {
         load_ebf(busy).await.expect("Can't load the ebpf!");
     });
@@ -433,6 +419,7 @@ async fn main() -> Result<()> {
         _ = tokio::signal::ctrl_c() => {},
         _ = std::future::pending::<()>() => {},
     }
+
     println!("Exiting...");
     Ok(())
 }

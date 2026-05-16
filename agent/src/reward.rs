@@ -20,8 +20,7 @@ pub fn compute_reward(features: &[f32]) -> f32 {
 }
 
 pub fn compute_reward_with_success(features: &[f32], action: u8) -> (f32, bool) {
-    println!("Environment metrics: {:?}", features);
-    println!("Decision made: {}", action);
+    println!("[AI] Environment metrics: {:?}, Action: {}", features, action);
 
     #[cfg(not(test))]
     {
