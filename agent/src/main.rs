@@ -11,6 +11,7 @@ use anyhow::Context;
 use anyhow::{Ok, Result};
 use aya::Pod;
 use local_ip_address::local_ip;
+use rand::seq::SliceRandom;
 use std::collections::HashMap;
 use std::env;
 use std::net::{Ipv4Addr, SocketAddr};
@@ -25,6 +26,8 @@ use crate::reward::compute_reward_with_success;
 
 static CACHE: LazyLock<RwLock<HashMap<String, Agent>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
+
+static NOTIFY: LazyLock<tokio::sync::Notify> = LazyLock::new(tokio::sync::Notify::new);
 
 static ME: LazyLock<Mutex<Agent>> = LazyLock::new(|| {
     let local_ip = local_ip().unwrap();
@@ -116,7 +119,12 @@ fn add_agents(details: &str, separator: char) {
 }
 
 pub async fn represent(action: u8) {
+    ME.lock().unwrap().state = action; 
     send_hello(action, false).await;
+    if action == 0 {
+        NOTIFY.notify_one(); // wake the ebpf loop immediately
+    }
+
     return;
     ME.lock().unwrap().state = action;
     let all_ips: Vec<String>;
@@ -316,79 +324,93 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
     loop {
         let mut mac_to_update: Option<(String, [u8; 6])> = None;
 
-        {
-            let agents = CACHE.read().unwrap();
+        let is_busy = busy || ME.lock().unwrap().state == 0;
 
-            if busy || ME.lock().unwrap().state == 0 {
-                for agent_borrowed in agents
+        if is_busy {
+            let mut agents_snapshot: Vec<Agent> = {
+                let agents = CACHE.read().unwrap();
+                agents
                     .iter()
-                    .filter(|x| x.0 != ip.to_string().as_str() && x.1.state == 2)
-                {
-                    let agent = agent_borrowed.1.clone();
+                    .filter(|(k, v)| k.as_str() != ip.to_string().as_str() && v.state != 0)
+                    .map(|(_, v)| v.clone())
+                    .collect()
+            }; // read guard dropped before any await
+            rand::seq::SliceRandom::shuffle(
+                agents_snapshot.as_mut_slice(),
+                &mut rand::thread_rng(),
+            );
 
-                    let default_interface_output = std::process::Command::new("ping")
-                        .args(["-c", "1", "-W", "1", agent.identifier.as_str()])
-                        .output()
-                        .expect("Can't find default network interface!")
-                        .stdout;
-                    let text: std::borrow::Cow<'_, str> =
-                        String::from_utf8_lossy(&default_interface_output);
+            for agent in &agents_snapshot {
+                let default_interface_output = tokio::process::Command::new("ping")
+                    .args(["-c", "1", "-W", "0.2", agent.identifier.as_str()])
+                    .output()
+                    .await
+                    .expect("Can't find default network interface!")
+                    .stdout;
+                let text = String::from_utf8_lossy(&default_interface_output);
 
-                    if text.contains("100% packet loss") {
-                        send_off_machine(&agent.identifier);
+                if text.contains("100% packet loss") {
+                    send_off_machine(&agent.identifier);
+                    continue;
+                }
+
+                if agent.state == 2 || agent.state == 1 {
+                    println!(">>>>>>>>>>>>>>>>>>>>>>>>>>>> {}", agent.stringify());
+                    let ipv4_addr: Ipv4Addr = agent.identifier.parse().unwrap();
+
+                    let ip_as_u32: u32 = ipv4_addr.into();
+                    if local_ip == ip_as_u32 {
                         continue;
                     }
-
-                    if agent.state == 2{
-                        println!(">>>>>>>>>>>>>>>>>>>>>>>>>>>> {}", agent.stringify());
-                        let ipv4_addr: Ipv4Addr = agent.identifier.parse().unwrap();
-
-                        let ip_as_u32: u32 = ipv4_addr.into();
-                        if local_ip == ip_as_u32 {
-                            continue;
-                        }
-                        let mut bytes: Vec<u8> = local_ip.to_be_bytes().into();
-                        for b in local_mac {
-                            bytes.push(b);
-                        }
-                        for b in ip_as_u32.to_be_bytes() {
-                            bytes.push(b);
-                        }
-                        let target_mac: [u8; 6] = if agent.mac != [0u8; 6] {
-                            agent.mac
-                        } else if let Some(mac) = get_mac_from_arp(ipv4_addr) {
-                            mac_to_update = Some((agent.identifier.clone(), mac.0));
-                            mac.0
-                        } else {
-                            println!("Failed to resolve MAC for {}, skipping", agent.identifier);
-                            continue;
-                        };
-
-                        for b in target_mac {
-                            bytes.push(b);
-                        }
-                        let data: [u8; 20] = bytes.try_into().expect("Not same length!");
-                        server_map
-                            .insert(0, data, 0)
-                            .expect("No server details defined!");
-                        println!(
-                            "Agent: {}({}) State: {}",
-                            agent.identifier, ip_as_u32, agent.state
-                        );
-                        found_agent = true;
-                        break;
+                    let mut bytes: Vec<u8> = local_ip.to_be_bytes().into();
+                    for b in local_mac {
+                        bytes.push(b);
                     }
+                    for b in ip_as_u32.to_be_bytes() {
+                        bytes.push(b);
+                    }
+                    let target_mac: [u8; 6] = if agent.mac != [0u8; 6] {
+                        agent.mac
+                    } else if let Some(mac) = get_mac_from_arp(ipv4_addr) {
+                        mac_to_update = Some((agent.identifier.clone(), mac.0));
+                        mac.0
+                    } else {
+                        println!("Failed to resolve MAC for {}, skipping", agent.identifier);
+                        continue;
+                    };
+
+                    for b in target_mac {
+                        bytes.push(b);
+                    }
+                    let data: [u8; 20] = bytes.try_into().expect("Not same length!");
+                    server_map
+                        .insert(0, data, 0)
+                        .expect("No server details defined!");
+                    println!(
+                        "Agent: {}({}) State: {}",
+                        agent.identifier, ip_as_u32, agent.state
+                    );
+
+                    // Evict chosen target so the next iteration picks a different agent,
+                    // distributing redirect load across the pool over time.
+                    {
+                        let mut cache = CACHE.write().unwrap();
+                        cache.remove(&agent.identifier);
+                    }
+
+                    found_agent = true;
+                    break;
                 }
             }
-
-            println!("server_map: {:?}", server_map.iter().collect::<Vec<_>>());
-
-            if !found_agent && let core::result::Result::Ok(_) = server_map.remove(&0) {
-                println!("No suitable agent found, clearing server map");
-            }
-
-            found_agent = false;
         }
+
+        println!("server_map: {:?}", server_map.iter().collect::<Vec<_>>());
+
+        if !found_agent && let core::result::Result::Ok(_) = server_map.remove(&0) {
+            println!("No suitable agent found, clearing server map");
+        }
+
+        found_agent = false;
 
         if let Some((id, mac)) = mac_to_update {
             let mut cache = CACHE.write().unwrap();
@@ -396,11 +418,12 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
                 cached.mac = mac;
             }
         }
-
-        tokio::time::sleep(tokio::time::Duration::from_secs(
-            CONFIG.get().unwrap().interval_secs,
-        ))
-        .await;
+        tokio::select! {
+            _ = tokio::time::sleep(tokio::time::Duration::from_secs(
+                    CONFIG.get().unwrap().interval_secs,
+                )) => {},
+            _ = NOTIFY.notified() => {},  // also wakes early on state change
+        }
     }
 }
 

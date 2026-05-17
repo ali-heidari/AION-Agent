@@ -1,7 +1,7 @@
 # config.toml
 debug = false
 
-interval_secs = 10
+interval_secs = 1
 batch_size=128
 total_batches=20000
 input_number=6
