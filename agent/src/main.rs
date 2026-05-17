@@ -68,6 +68,7 @@ impl Agent {
                 .collect();
             mac = mac_temp.try_into().expect("Invalid MAC address length");
         }
+
         let update_time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -90,6 +91,13 @@ impl Agent {
             }
 
             agent.update_time = update_time;
+
+            if agent.mac == [0u8; 6] {
+                agent.mac = get_mac_from_arp(agent.identifier.parse().unwrap())
+                    .expect(format!("Failed to resolve MAC address for {}",agent.identifier).as_str())
+                    .0;
+            }
+
             cache.insert(identifier.to_owned(), agent.clone());
         }
 
@@ -118,42 +126,10 @@ fn add_agents(details: &str, separator: char) {
 }
 
 pub async fn represent(action: u8) {
-    ME.lock().unwrap().state = action; 
+    ME.lock().unwrap().state = action;
     send_hello(action, false).await;
     if action == 0 {
         NOTIFY.notify_one(); // wake the ebpf loop immediately
-    }
-
-    return;
-    ME.lock().unwrap().state = action;
-    let all_ips: Vec<String>;
-    {
-        let cache = CACHE.read().unwrap();
-        all_ips = cache
-            .iter()
-            .map(|entry| entry.1.stringify())
-            .collect::<Vec<String>>();
-    }
-
-    let message = action.to_string() + "|" + all_ips.join("|").as_str();
-    if !all_ips.is_empty() {
-        for ip in all_ips
-            .iter()
-            .map(|ip| *ip.split(",").collect::<Vec<&str>>().first().unwrap())
-        {
-            if ip.eq(local_ip().unwrap().to_string().as_str()) {
-                continue;
-            }
-            println!("represent to: {}", ip);
-            if let Err(e) = client::send(ip, 4433, message.as_bytes()).await {
-                {
-                    let mut cache = CACHE.write().unwrap();
-                    cache.remove(ip);
-                }
-                println!("Error while sending IP(s) to agents: {:?}", e);
-                println!("Removing agent {}", ip);
-            }
-        }
     }
 }
 
@@ -237,14 +213,6 @@ async fn start_predicting() -> Result<()> {
     Ok(())
 }
 
-fn on_message_received(ip: String, message: String) {
-    println!("Quic message received-> [{}]: {}", ip, message);
-
-    let details = ip + "," + &message;
-
-    add_agents(details.as_str(), '|');
-}
-
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct RedirectionData {
@@ -321,10 +289,8 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
     let local_ip: u32 = ip.to_string().parse::<Ipv4Addr>().unwrap().into();
     let local_mac: [u8; 6] = mac_address::get_mac_address().unwrap().unwrap().bytes();
     loop {
-        let mut mac_to_update: Option<(String, [u8; 6])> = None;
-
         let is_busy = busy || ME.lock().unwrap().state == 0;
-
+        println!("IS_BUSY: {}", is_busy);
         if is_busy {
             let mut agents_snapshot: Vec<Agent> = {
                 let agents = CACHE.read().unwrap();
@@ -354,7 +320,6 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
                 }
 
                 if agent.state == 2 || agent.state == 1 {
-                    println!(">>>>>>>>>>>>>>>>>>>>>>>>>>>> {}", agent.stringify());
                     let ipv4_addr: Ipv4Addr = agent.identifier.parse().unwrap();
 
                     let ip_as_u32: u32 = ipv4_addr.into();
@@ -368,15 +333,7 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
                     for b in ip_as_u32.to_be_bytes() {
                         bytes.push(b);
                     }
-                    let target_mac: [u8; 6] = if agent.mac != [0u8; 6] {
-                        agent.mac
-                    } else if let Some(mac) = get_mac_from_arp(ipv4_addr) {
-                        mac_to_update = Some((agent.identifier.clone(), mac.0));
-                        mac.0
-                    } else {
-                        println!("Failed to resolve MAC for {}, skipping", agent.identifier);
-                        continue;
-                    };
+                    let target_mac: [u8; 6] = agent.mac;
 
                     for b in target_mac {
                         bytes.push(b);
@@ -386,16 +343,12 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
                         .insert(0, data, 0)
                         .expect("No server details defined!");
                     println!(
-                        "Agent: {}({}) State: {}",
-                        agent.identifier, ip_as_u32, agent.state
+                        "[SELECTED_AGENT]: {}({}) \t STATE: {}\n[SERVER-MAP]: {:?}",
+                        agent.identifier,
+                        target_mac.map(|x| x.to_string()).join(":"),
+                        agent.state,
+                        server_map.iter().collect::<Vec<_>>()
                     );
-
-                    // Evict chosen target so the next iteration picks a different agent,
-                    // distributing redirect load across the pool over time.
-                    {
-                        let mut cache = CACHE.write().unwrap();
-                        cache.remove(&agent.identifier);
-                    }
 
                     found_agent = true;
                     break;
@@ -403,25 +356,19 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
             }
         }
 
-        println!("server_map: {:?}", server_map.iter().collect::<Vec<_>>());
-
         if !found_agent && let core::result::Result::Ok(_) = server_map.remove(&0) {
             println!("No suitable agent found, clearing server map");
         }
 
         found_agent = false;
 
-        if let Some((id, mac)) = mac_to_update {
-            let mut cache = CACHE.write().unwrap();
-            if let Some(cached) = cache.get_mut(&id) {
-                cached.mac = mac;
-            }
-        }
         tokio::select! {
             _ = tokio::time::sleep(tokio::time::Duration::from_secs(
                     CONFIG.get().unwrap().interval_secs,
                 )) => {},
-            _ = NOTIFY.notified() => {},  // also wakes early on state change
+            _ = NOTIFY.notified() => {
+                println!("Received notification to wake up early due to state change");
+            },  // also wakes early on state change
         }
     }
 }
