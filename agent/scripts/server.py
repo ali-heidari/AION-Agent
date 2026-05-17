@@ -20,10 +20,6 @@ class IPResponseHandler(BaseHTTPRequestHandler):
         original_ip = host_header.split(':')[0]
         redirected = bool(original_ip) and original_ip != MACHINE_IP
 
-        self.send_response(200)
-        self.send_header('Content-Type', 'text/plain')
-        self.end_headers()
-
         if redirected:
             body = f"ip={MACHINE_IP} redirected=true original_dest={original_ip}\n"
         else:
@@ -32,7 +28,13 @@ class IPResponseHandler(BaseHTTPRequestHandler):
         body += f"host_header={host_header!r}\n"
         body += "headers:\n" + "".join(f"  {k}: {v}\n" for k, v in self.headers.items())
 
-        self.wfile.write(body.encode('utf-8'))
+        try:
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(body.encode('utf-8'))
+        except ConnectionError:
+            pass
 
     def log_message(self, format, *args):
         pass
