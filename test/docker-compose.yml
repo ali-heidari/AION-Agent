@@ -13,61 +13,61 @@ services:
     <<: *mock
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.70
+        ipv4_address: 192.168.100.70
 
   mock-71:
     <<: *mock
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.71
+        ipv4_address: 192.168.100.71
 
   mock-72:
     <<: *mock
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.72
+        ipv4_address: 192.168.100.72
 
   mock-73:
     <<: *mock
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.73
+        ipv4_address: 192.168.100.73
 
   mock-74:
     <<: *mock
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.74
+        ipv4_address: 192.168.100.74
 
   mock-75:
     <<: *mock
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.75
+        ipv4_address: 192.168.100.75
 
   mock-76:
     <<: *mock
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.76
+        ipv4_address: 192.168.100.76
 
   mock-77:
     <<: *mock
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.77
+        ipv4_address: 192.168.100.77
 
   mock-78:
     <<: *mock
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.78
+        ipv4_address: 192.168.100.78
 
   mock-79:
     <<: *mock
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.79
+        ipv4_address: 192.168.100.79
 
 
   haproxy:
@@ -76,7 +76,7 @@ services:
       - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.80
+        ipv4_address: 192.168.100.80
 
   nginx:
     image: nginx:alpine
@@ -84,7 +84,7 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.81
+        ipv4_address: 192.168.100.81
 
 networks:
   mymacvlan:

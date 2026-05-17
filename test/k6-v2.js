@@ -5,9 +5,9 @@ import { sleep, check } from 'k6';
 const TARGET = __ENV.TARGET || 'all';
 
 const TARGETS = {
-  nginx:   ['http://192.168.1.81:80'],
-  haproxy: ['http://192.168.1.80:80'],
-  all:     Array.from({ length: 10 }, (_, i) => `http://192.168.1.${60 + i}:8123`),
+  nginx:   ['http://192.168.100.81:80'],
+  haproxy: ['http://192.168.100.80:80'],
+  all:     Array.from({ length: 10 }, (_, i) => `http://192.168.100.${60 + i}:8123`),
 };
 
 const urls = TARGETS[TARGET];

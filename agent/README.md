@@ -78,26 +78,26 @@ sudo docker run -it --rm --net=container:aaa nicolaka/netshoot tcpdump -i eth0 -
 Add network:
 
 ```bash
-sudo docker network create -d macvlan --subnet=192.168.1.0/24 --gateway=192.168.1.1 -o parent=wlp3s0 mymacvlan
+sudo docker network create -d macvlan --subnet=192.168.100.0/24 --gateway=192.168.100.1 -o parent=wlp3s0 mymacvlan
 ```
 
 Access from host:
 
 ```bash
 sudo ip link add link wlp3s0 name host_link type macvlan mode bridge
-sudo ip addr add 192.168.1.254/24 dev host_link
+sudo ip addr add 192.168.100.254/24 dev host_link
 sudo ip link set dev host_link up
 ```
 
 Run container with macvlan network:
 
 ```bash
-sudo docker run -it --name lll --cap-add=NET_ADMIN --cap-add=SYS_ADMIN --memory=50M --cpus=1 --network=mymacvlan --ip=192.168.1.70 aixker-agent
+sudo docker run -it --name lll --cap-add=NET_ADMIN --cap-add=SYS_ADMIN --memory=50M --cpus=1 --network=mymacvlan --ip=192.168.100.70 aixker-agent
 ```
 
 ### Docker Compose
 
-`docker-compose.yml` launches 10 agents with static IPs `192.168.1.60–69` on the `mymacvlan` network. Create the macvlan network first (see above) if it doesn't exist.
+`docker-compose.yml` launches 10 agents with static IPs `192.168.100.60–69` on the `mymacvlan` network. Create the macvlan network first (see above) if it doesn't exist.
 
 Build the image:
 

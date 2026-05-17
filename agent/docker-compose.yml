@@ -21,53 +21,53 @@ services:
     <<: *agent
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.60
+        ipv4_address: 192.168.100.60
   APy61:
     <<: *agent
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.61
+        ipv4_address: 192.168.100.61
 
   APy62:
     <<: *agent
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.62
+        ipv4_address: 192.168.100.62
   APy63:
     <<: *agent
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.63
+        ipv4_address: 192.168.100.63
   APy64:
     <<: *agent
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.64
+        ipv4_address: 192.168.100.64
   APy65:
     <<: *agent
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.65
+        ipv4_address: 192.168.100.65
   APy66:
     <<: *agent
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.66
+        ipv4_address: 192.168.100.66
   APy67:
     <<: *agent
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.67
+        ipv4_address: 192.168.100.67
   APy68:
     <<: *agent
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.68
+        ipv4_address: 192.168.100.68
   APy69:
     <<: *agent
     networks:
       mymacvlan:
-        ipv4_address: 192.168.1.69
+        ipv4_address: 192.168.100.69
 
 networks:
   mymacvlan:
