@@ -18,7 +18,7 @@ pub struct MacAddress(pub [u8; 6]);
 pub fn get_machines_from_arp() -> Option<Vec<Ipv4Addr>> {
     let file = File::open("/proc/net/arp").ok()?;
     let reader = BufReader::new(file);
-    let mut ips: Vec<Ipv4Addr>=vec![];
+    let mut ips: Vec<Ipv4Addr> = vec![];
 
     // Skip header line
     for (i, line) in reader.lines().enumerate() {
@@ -40,6 +40,11 @@ pub fn get_machines_from_arp() -> Option<Vec<Ipv4Addr>> {
 }
 
 pub fn get_mac_from_arp(ip: Ipv4Addr) -> Option<MacAddress> {
+    std::process::Command::new("ping")
+        .args(["-c", "1", "-W", "0.2", ip.to_string().as_str()])
+        .output()
+        .expect("Can't find default network interface!");
+
     let file = File::open("/proc/net/arp").ok()?;
     let reader = BufReader::new(file);
     let ip_str = ip.to_string();
