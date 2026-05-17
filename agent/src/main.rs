@@ -1,6 +1,6 @@
 mod configurations;
 mod get_mac_from_arp;
-mod mock;
+mod metrics;
 mod reward;
 
 use aion_transporter::multicast;
@@ -11,7 +11,6 @@ use anyhow::Context;
 use anyhow::{Ok, Result};
 use aya::Pod;
 use local_ip_address::local_ip;
-use rand::seq::SliceRandom;
 use std::collections::HashMap;
 use std::env;
 use std::net::{Ipv4Addr, SocketAddr};
@@ -21,7 +20,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::configurations::load_config;
 use crate::get_mac_from_arp::get_mac_from_arp;
-use crate::mock::{DatasetMode, SyntheticState};
+use crate::metrics::{DatasetMode, SyntheticState};
 use crate::reward::compute_reward_with_success;
 
 static CACHE: LazyLock<RwLock<HashMap<String, Agent>>> =
