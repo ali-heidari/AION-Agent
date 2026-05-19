@@ -1,4 +1,4 @@
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import socket
 
 def get_machine_ip():
@@ -41,7 +41,7 @@ class IPResponseHandler(BaseHTTPRequestHandler):
 
 if __name__ == '__main__':
     PORT = 8123
-    server = HTTPServer(('0.0.0.0', PORT), IPResponseHandler)
+    server = ThreadingHTTPServer(('0.0.0.0', PORT), IPResponseHandler)
     print(f"Server running on http://0.0.0.0:{PORT} (machine IP: {MACHINE_IP})")
     try:
         server.serve_forever()
