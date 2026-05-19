@@ -296,7 +296,10 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
                 let agents = CACHE.read().unwrap();
                 agents
                     .iter()
-                    .filter(|(k, v)| k.as_str() != ip.to_string().as_str() && v.state != 0)
+                    .filter(|(k, v)| {
+                        k.parse::<Ipv4Addr>().map(u32::from).unwrap_or(local_ip) != local_ip
+                            && v.state != 0
+                    })
                     .map(|(_, v)| v.clone())
                     .collect()
             }; // read guard dropped before any await
