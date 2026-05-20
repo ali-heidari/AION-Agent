@@ -1,10 +1,8 @@
 mod configurations;
 mod get_mac_from_arp;
 mod metrics;
-mod reward;
 
 use aion_transporter::multicast;
-use aion_transporter::quic::client;
 use aixker_rlt::CONFIG;
 use aixker_rlt::node::Node;
 use anyhow::Context;
@@ -21,7 +19,6 @@ use std::sync::{Arc, Mutex};
 use crate::configurations::load_config;
 use crate::get_mac_from_arp::get_mac_from_arp;
 use crate::metrics::{DatasetMode, SyntheticState};
-use crate::reward::compute_reward_with_success;
 
 static CACHE: LazyLock<RwLock<HashMap<String, Agent>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
@@ -94,7 +91,9 @@ impl Agent {
 
             if agent.mac == [0u8; 6] {
                 agent.mac = get_mac_from_arp(agent.identifier.parse().unwrap())
-                    .expect(format!("Failed to resolve MAC address for {}",agent.identifier).as_str())
+                    .expect(
+                        format!("Failed to resolve MAC address for {}", agent.identifier).as_str(),
+                    )
                     .0;
             }
 
@@ -125,12 +124,22 @@ fn add_agents(details: &str, separator: char) {
     }
 }
 
-pub async fn represent(action: u8) {
-    ME.lock().unwrap().state = action;
-    send_hello(action, false).await;
-    if action == 0 {
-        NOTIFY.notify_one(); // wake the ebpf loop immediately
+pub fn represent(features: &[f32], action: u8, counter: u32) -> (f32, bool) {
+    println!(
+        "[AI] Environment metrics: {:?}, Action: {}, Counter: {}",
+        features, action, counter
+    );
+
+    let mut me = ME.lock().unwrap();
+    if me.state != action {
+        me.state = action;
+        tokio::spawn(send_hello(action, false));
+        if action == 0 {
+            NOTIFY.notify_one(); // wake the ebpf loop immediately
+        }
     }
+
+    (1.0, true)
 }
 
 async fn on_data_received(address: SocketAddr, data: &[u8]) {
@@ -204,7 +213,7 @@ async fn start_predicting() -> Result<()> {
 
     Node::start(
         move |lowest_state| get_features(&mut cloned_state.lock().unwrap(), lowest_state),
-        |x, y, c| compute_reward_with_success(x, y as u8),
+        |x, y, c| represent(x, y as u8, c),
         CONFIG.get().unwrap().mode,
         "model-128.json",
     )
