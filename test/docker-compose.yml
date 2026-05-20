@@ -2,11 +2,12 @@ name: aixker-no_agent
 
 x-mock: &mock
   image: python:3-alpine
-  command: sh -c "python3 /mock.py & python3 -m http.server 8123 --bind 0.0.0.0"
+  command: sh -c "python3 /mock.py & python3 /server.py"
   mem_limit: 128m
   cpus: 1.0
   volumes:
     - ../agent/scripts/mock.py:/mock.py:ro
+    - ../agent/scripts/server.py:/server.py:ro
 
 services:
   mock-70:
