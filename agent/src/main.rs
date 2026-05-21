@@ -88,6 +88,7 @@ impl Agent {
             }
 
             agent.update_time = update_time;
+            agent.state = state;
 
             if agent.mac == [0u8; 6] {
                 agent.mac = get_mac_from_arp(agent.identifier.parse().unwrap())
@@ -156,7 +157,12 @@ async fn on_data_received(address: SocketAddr, data: &[u8]) {
 
 async fn listen_to_agents() {
     tokio::spawn(async {
-        if let Err(e) = aion_transporter::multicast::listen(on_data_received).await {};
+        loop {
+            if let Err(e) = aion_transporter::multicast::listen(on_data_received).await {
+                println!("Multicast listener error: {:?}, restarting...", e);
+            }
+            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+        }
     });
 }
 
@@ -177,10 +183,30 @@ async fn send_hello(action: u8, include_mac: bool) {
     if let Err(error) = multicast::send(message.as_str()).await {}
 }
 async fn send_off_machine(ip: &str) {
-    let local_ip = local_ip().unwrap();
-    let message = local_ip.to_string() + "=-1";
+    let message = ip.to_string() + "=-1";
     if let Err(error) = multicast::send(message.as_str()).await {
     }
+}
+
+fn start_cache_reaper() {
+    tokio::spawn(async {
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+            let evicted = {
+                let mut cache = CACHE.write().unwrap();
+                let before = cache.len();
+                cache.retain(|_, agent| now.saturating_sub(agent.update_time) <= 10);
+                before - cache.len()
+            };
+            if evicted > 0 {
+                NOTIFY.notify_one();
+            }
+        }
+    });
 }
 
 fn start_ai() {
@@ -363,6 +389,7 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
         }
 
         if !found_agent && let core::result::Result::Ok(_) = server_map.remove(&0) {
+                println!("No agent found, removing server from map.");
         }
 
         found_agent = false;
@@ -386,8 +413,10 @@ async fn main() -> Result<()> {
     if args.len() > 2 {
         let option = &args[2];
         if option.eq("neighbor") {
-            let neighbor = &args[2];
-            add_agents((neighbor.to_string() + ",2").as_str(), '|');
+            if args.len() > 3 {
+                let neighbor = &args[3];
+                add_agents((neighbor.to_string() + ",2").as_str(), '|');
+            }
         } else if option.eq("busy") {
             busy = true;
         }
@@ -397,6 +426,7 @@ async fn main() -> Result<()> {
 
     send_hello(2, true).await;
 
+    start_cache_reaper();
     start_ai();
 
     println!("Load ebpf - XDP Program [busy={}]", busy);
