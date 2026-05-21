@@ -350,6 +350,10 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
                 found_agent = true;
             } else {
                 current_target = None;
+                // Clear SERVERMAP immediately so new SYNs during the search get a fast
+                // RST from the kernel rather than timing out against the dead target.
+                // In-flight connections are unaffected — they live in NAT_MAP entries.
+                let _ = server_map.remove(&0);
                 let mut agents_snapshot: Vec<Agent> = {
                     let agents = CACHE.read().unwrap();
                     agents
@@ -367,16 +371,30 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
                     &mut rand::thread_rng(),
                 );
 
+                let mut join_set = tokio::task::JoinSet::new();
                 for agent in &agents_snapshot {
-                    let default_interface_output = tokio::process::Command::new("ping")
-                        .args(["-c", "1", "-W", "0.05", agent.identifier.as_str()])
-                        .output()
-                        .await
-                        .expect("Can't find default network interface!")
-                        .stdout;
-                    let text = String::from_utf8_lossy(&default_interface_output);
+                    let id = agent.identifier.clone();
+                    join_set.spawn(async move {
+                        let out = tokio::process::Command::new("ping")
+                            .args(["-c", "1", "-W", "0.05", &id])
+                            .output()
+                            .await
+                            .expect("ping failed");
+                        let alive = !String::from_utf8_lossy(&out.stdout)
+                            .contains("100% packet loss");
+                        (id, alive)
+                    });
+                }
 
-                    if text.contains("100% packet loss") {
+                let mut ping_results: HashMap<String, bool> = HashMap::new();
+                while let Some(res) = join_set.join_next().await {
+                    let (id, alive) = res.expect("ping task panicked");
+                    ping_results.insert(id, alive);
+                }
+
+                for agent in &agents_snapshot {
+                    let alive = *ping_results.get(&agent.identifier).unwrap_or(&false);
+                    if !alive {
                         send_off_machine(&agent.identifier).await;
                         continue;
                     }
@@ -419,10 +437,10 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
 
         found_agent = false;
 
-        // When busy with an active target, health-check every 5s regardless of interval_secs
+        // When busy with an active target, health-check every 1s regardless of interval_secs
         // to bound the stale-SERVERMAP window. Otherwise respect the full interval.
         let sleep_secs = if is_busy && current_target.is_some() {
-            5u64
+            1u64
         } else {
             CONFIG.get().unwrap().interval_secs
         };
