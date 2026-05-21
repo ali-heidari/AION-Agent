@@ -125,11 +125,6 @@ fn add_agents(details: &str, separator: char) {
 }
 
 pub fn represent(features: &[f32], action: u8, counter: u32) -> (f32, bool) {
-    println!(
-        "[AI] Environment metrics: {:?}, Action: {}, Counter: {}",
-        features, action, counter
-    );
-
     let mut me = ME.lock().unwrap();
     if me.state != action {
         me.state = action;
@@ -144,7 +139,7 @@ pub fn represent(features: &[f32], action: u8, counter: u32) -> (f32, bool) {
 
 async fn on_data_received(address: SocketAddr, data: &[u8]) {
     let message = String::from_utf8(data.to_vec()).unwrap();
-    println!("[MULTICAST] {}= {:?}", address.ip(), message);
+
     if message.contains('=') {
         {
             let mut cache = CACHE.write().unwrap();
@@ -161,10 +156,7 @@ async fn on_data_received(address: SocketAddr, data: &[u8]) {
 
 async fn listen_to_agents() {
     tokio::spawn(async {
-        if let Err(e) = aion_transporter::multicast::listen(on_data_received).await {
-            println!("Error while listening for multicast packets: {:?}", e);
-        };
-        println!("Listening thread closed");
+        if let Err(e) = aion_transporter::multicast::listen(on_data_received).await {};
     });
 }
 
@@ -182,15 +174,12 @@ async fn send_hello(action: u8, include_mac: bool) {
                 .as_str()
     }
 
-    if let Err(error) = multicast::send(message.as_str()).await {
-        println!("Error while sending hello: {:?}", error);
-    }
+    if let Err(error) = multicast::send(message.as_str()).await {}
 }
 async fn send_off_machine(ip: &str) {
     let local_ip = local_ip().unwrap();
     let message = local_ip.to_string() + "=-1";
     if let Err(error) = multicast::send(message.as_str()).await {
-        println!("Error while sending hello: {:?}", error);
     }
 }
 
@@ -199,7 +188,6 @@ fn start_ai() {
         if let Err(e) = start_predicting().await {
             println!("Error while starting AI: {:?}", e);
         };
-        println!("Starting AI thread closed");
     });
 }
 
@@ -299,7 +287,6 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
     let local_mac: [u8; 6] = mac_address::get_mac_address().unwrap().unwrap().bytes();
     loop {
         let is_busy = busy || ME.lock().unwrap().state == 0;
-        println!("IS_BUSY: {}", is_busy);
         if is_busy {
             let mut agents_snapshot: Vec<Agent> = {
                 let agents = CACHE.read().unwrap();
@@ -331,7 +318,7 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
                     continue;
                 }
 
-                if agent.state == 2  {
+                if agent.state == 2 {
                     let ipv4_addr: Ipv4Addr = agent.identifier.parse().unwrap();
 
                     let ip_as_u32: u32 = ipv4_addr.into();
@@ -354,13 +341,6 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
                     server_map
                         .insert(0, data, 0)
                         .expect("No server details defined!");
-                    println!(
-                        "[SELECTED_AGENT]: {}({}) \t STATE: {}\n[SERVER-MAP]: {:?}",
-                        agent.identifier,
-                        target_mac.map(|x| x.to_string()).join(":"),
-                        agent.state,
-                        server_map.iter().collect::<Vec<_>>()
-                    );
 
                     found_agent = true;
                     break;
@@ -369,7 +349,6 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
         }
 
         if !found_agent && let core::result::Result::Ok(_) = server_map.remove(&0) {
-            println!("No suitable agent found, clearing server map");
         }
 
         found_agent = false;
@@ -378,25 +357,20 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
             _ = tokio::time::sleep(tokio::time::Duration::from_secs(
                     CONFIG.get().unwrap().interval_secs,
                 )) => {},
-            _ = NOTIFY.notified() => {
-                println!("Received notification to wake up early due to state change");
-            },  // also wakes early on state change
+            _ = NOTIFY.notified() => {}
         }
     }
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    println!("Let's begin...");
     env_logger::init();
-    println!("Log initialized...!");
 
     let mut busy = false;
 
     let args: Vec<String> = env::args().collect();
     if args.len() > 2 {
         let option = &args[2];
-        println!("The args: {:?}", &args);
         if option.eq("neighbor") {
             let neighbor = &args[2];
             add_agents((neighbor.to_string() + ",2").as_str(), '|');
@@ -404,13 +378,11 @@ async fn main() -> Result<()> {
             busy = true;
         }
     }
-    println!("Listening to multicast packets!");
+
     listen_to_agents().await;
 
-    println!("Broadcasting hello!");
     send_hello(2, true).await;
 
-    println!("Start AI");
     start_ai();
 
     println!("Load ebpf - XDP Program [busy={}]", busy);
@@ -423,6 +395,5 @@ async fn main() -> Result<()> {
         _ = std::future::pending::<()>() => {},
     }
 
-    println!("Exiting...");
     Ok(())
 }
