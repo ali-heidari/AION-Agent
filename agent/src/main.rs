@@ -319,7 +319,7 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
 
             for agent in &agents_snapshot {
                 let default_interface_output = tokio::process::Command::new("ping")
-                    .args(["-c", "1", "-W", "0.2", agent.identifier.as_str()])
+                    .args(["-c", "1", "-W", "0.05", agent.identifier.as_str()])
                     .output()
                     .await
                     .expect("Can't find default network interface!")
@@ -331,7 +331,7 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
                     continue;
                 }
 
-                if agent.state == 2 || agent.state == 1 {
+                if agent.state == 2  {
                     let ipv4_addr: Ipv4Addr = agent.identifier.parse().unwrap();
 
                     let ip_as_u32: u32 = ipv4_addr.into();
