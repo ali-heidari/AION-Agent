@@ -281,6 +281,7 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
     let mut server_map: aya::maps::HashMap<_, u32, [u8; 20]> =
         aya::maps::HashMap::try_from(bpf.map_mut("SERVERMAP").unwrap()).unwrap();
     let mut found_agent: bool = false;
+    let mut current_target: Option<String> = None;
 
     let ip = local_ip().unwrap();
     let local_ip: u32 = ip.to_string().parse::<Ipv4Addr>().unwrap().into();
@@ -288,64 +289,77 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
     loop {
         let is_busy = busy || ME.lock().unwrap().state == 0;
         if is_busy {
-            let mut agents_snapshot: Vec<Agent> = {
+            // Keep the current target as long as it is still in state 2 in the cache.
+            // Only search for a replacement when it disappears or changes state.
+            let current_still_valid = current_target.as_ref().map_or(false, |id| {
                 let agents = CACHE.read().unwrap();
-                agents
-                    .iter()
-                    .filter(|(k, v)| {
-                        k.parse::<Ipv4Addr>().map(u32::from).unwrap_or(local_ip) != local_ip
-                            && v.state != 0
-                    })
-                    .map(|(_, v)| v.clone())
-                    .collect()
-            }; // read guard dropped before any await
-            rand::seq::SliceRandom::shuffle(
-                agents_snapshot.as_mut_slice(),
-                &mut rand::thread_rng(),
-            );
+                agents.get(id.as_str()).map_or(false, |a| a.state == 2)
+            });
 
-            for agent in &agents_snapshot {
-                let default_interface_output = tokio::process::Command::new("ping")
-                    .args(["-c", "1", "-W", "0.05", agent.identifier.as_str()])
-                    .output()
-                    .await
-                    .expect("Can't find default network interface!")
-                    .stdout;
-                let text = String::from_utf8_lossy(&default_interface_output);
+            if current_still_valid {
+                found_agent = true;
+            } else {
+                current_target = None;
+                let mut agents_snapshot: Vec<Agent> = {
+                    let agents = CACHE.read().unwrap();
+                    agents
+                        .iter()
+                        .filter(|(k, v)| {
+                            k.parse::<Ipv4Addr>().map(u32::from).unwrap_or(local_ip) != local_ip
+                                && v.state != 0
+                        })
+                        .map(|(_, v)| v.clone())
+                        .collect()
+                };
+                rand::seq::SliceRandom::shuffle(
+                    agents_snapshot.as_mut_slice(),
+                    &mut rand::thread_rng(),
+                );
 
-                if text.contains("100% packet loss") {
-                    send_off_machine(&agent.identifier);
-                    continue;
-                }
+                for agent in &agents_snapshot {
+                    let default_interface_output = tokio::process::Command::new("ping")
+                        .args(["-c", "1", "-W", "0.05", agent.identifier.as_str()])
+                        .output()
+                        .await
+                        .expect("Can't find default network interface!")
+                        .stdout;
+                    let text = String::from_utf8_lossy(&default_interface_output);
 
-                if agent.state == 2 {
-                    let ipv4_addr: Ipv4Addr = agent.identifier.parse().unwrap();
-
-                    let ip_as_u32: u32 = ipv4_addr.into();
-                    if local_ip == ip_as_u32 {
+                    if text.contains("100% packet loss") {
+                        send_off_machine(&agent.identifier).await;
                         continue;
                     }
-                    let mut bytes: Vec<u8> = local_ip.to_be_bytes().into();
-                    for b in local_mac {
-                        bytes.push(b);
-                    }
-                    for b in ip_as_u32.to_be_bytes() {
-                        bytes.push(b);
-                    }
-                    let target_mac: [u8; 6] = agent.mac;
 
-                    for b in target_mac {
-                        bytes.push(b);
-                    }
-                    let data: [u8; 20] = bytes.try_into().expect("Not same length!");
-                    server_map
-                        .insert(0, data, 0)
-                        .expect("No server details defined!");
+                    if agent.state == 2 {
+                        let ipv4_addr: Ipv4Addr = agent.identifier.parse().unwrap();
+                        let ip_as_u32: u32 = ipv4_addr.into();
+                        if local_ip == ip_as_u32 {
+                            continue;
+                        }
+                        let mut bytes: Vec<u8> = local_ip.to_be_bytes().into();
+                        for b in local_mac {
+                            bytes.push(b);
+                        }
+                        for b in ip_as_u32.to_be_bytes() {
+                            bytes.push(b);
+                        }
+                        let target_mac: [u8; 6] = agent.mac;
+                        for b in target_mac {
+                            bytes.push(b);
+                        }
+                        let data: [u8; 20] = bytes.try_into().expect("Not same length!");
+                        server_map
+                            .insert(0, data, 0)
+                            .expect("No server details defined!");
 
-                    found_agent = true;
-                    break;
+                        current_target = Some(agent.identifier.clone());
+                        found_agent = true;
+                        break;
+                    }
                 }
             }
+        } else {
+            current_target = None;
         }
 
         if !found_agent && let core::result::Result::Ok(_) = server_map.remove(&0) {
