@@ -235,30 +235,6 @@ impl SyntheticState {
 
         self.last_update = now;
 
-        let file = std::fs::OpenOptions::new()
-            .write(true)
-            .append(true)
-            .create(true)
-            .open("output.csv")
-            .unwrap();
-        let mut wtr = csv::WriterBuilder::new().from_writer(file);
-
-        if self.count == 1 {
-            let _ = wtr.write_record(&[
-                "cpu", "memory", "swap", "disk", "throughput", "latency",
-            ]);
-        }
-
-        let _ = wtr.write_record(&[
-            self.cpu.to_string(),
-            self.mem.to_string(),
-            self.swap.to_string(),
-            self.disk.to_string(),
-            self.throughput.to_string(),
-            self.latency.to_string(),
-        ]);
-        let _ = wtr.flush();
-
         vec![
             self.cpu,
             self.mem,
