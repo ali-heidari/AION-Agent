@@ -72,11 +72,13 @@ impl Agent {
             .as_secs();
 
         let mut agent;
+        let mut state_changed = false;
         {
             let mut cache = CACHE.write().unwrap();
 
             let agent_option = cache.get_mut(identifier);
             agent = if let Some(existing_agent) = agent_option {
+                state_changed = existing_agent.state != state;
                 existing_agent.clone()
             } else {
                 Agent::new(identifier, mac, state)
@@ -99,6 +101,10 @@ impl Agent {
             }
 
             cache.insert(identifier.to_owned(), agent.clone());
+        }
+
+        if state_changed {
+            NOTIFY.notify_one();
         }
 
         agent
@@ -131,7 +137,7 @@ pub fn represent(features: &[f32], action: u8, counter: u32) -> (f32, bool) {
         me.state = action;
         tokio::spawn(send_hello(action, false));
         if action == 0 {
-            NOTIFY.notify_one(); // wake the ebpf loop immediately
+            NOTIFY.notify_one(); // wake immediately when becoming busy; healthy transition lets in-flight connections drain
         }
     }
 
@@ -315,12 +321,30 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
     loop {
         let is_busy = busy || ME.lock().unwrap().state == 0;
         if is_busy {
-            // Keep the current target as long as it is still in state 2 in the cache.
-            // Only search for a replacement when it disappears or changes state.
-            let current_still_valid = current_target.as_ref().map_or(false, |id| {
-                let agents = CACHE.read().unwrap();
-                agents.get(id.as_str()).map_or(false, |a| a.state == 2)
-            });
+            // Validate current target: must be state=2 in cache AND reachable via ping.
+            // One ICMP per interval_secs; dead targets detected in ≤50ms not ≤10s.
+            let (current_still_valid, failed_target) = if let Some(id) = &current_target {
+                let in_cache = {
+                    let agents = CACHE.read().unwrap();
+                    agents.get(id.as_str()).map_or(false, |a| a.state == 2)
+                };
+                if in_cache {
+                    let out = tokio::process::Command::new("ping")
+                        .args(["-c", "1", "-W", "0.05", id.as_str()])
+                        .output()
+                        .await
+                        .expect("ping failed");
+                    let alive = !String::from_utf8_lossy(&out.stdout).contains("100% packet loss");
+                    // Do not call send_off_machine here: transient ICMP failures under load
+                    // would broadcast false deaths and cascade evictions across the cluster.
+                    // The search loop below calls send_off_machine after deliberate multi-ping.
+                    (alive, if alive { None } else { Some(id.clone()) })
+                } else {
+                    (false, None)
+                }
+            } else {
+                (false, None)
+            };
 
             if current_still_valid {
                 found_agent = true;
@@ -333,6 +357,7 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
                         .filter(|(k, v)| {
                             k.parse::<Ipv4Addr>().map(u32::from).unwrap_or(local_ip) != local_ip
                                 && v.state != 0
+                                && Some(k.as_str()) != failed_target.as_deref()
                         })
                         .map(|(_, v)| v.clone())
                         .collect()
@@ -394,10 +419,15 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
 
         found_agent = false;
 
+        // When busy with an active target, health-check every 5s regardless of interval_secs
+        // to bound the stale-SERVERMAP window. Otherwise respect the full interval.
+        let sleep_secs = if is_busy && current_target.is_some() {
+            5u64
+        } else {
+            CONFIG.get().unwrap().interval_secs
+        };
         tokio::select! {
-            _ = tokio::time::sleep(tokio::time::Duration::from_secs(
-                    CONFIG.get().unwrap().interval_secs,
-                )) => {},
+            _ = tokio::time::sleep(tokio::time::Duration::from_secs(sleep_secs)) => {},
             _ = NOTIFY.notified() => {}
         }
     }
