@@ -1,4 +1,4 @@
-# AION
+# AIxKer
 
 A distributed AI-driven L4 load balancer written in Rust. Runs a reinforcement-learning agent on each node alongside an eBPF/XDP kernel-bypass NAT engine — routing decisions happen inside the kernel before the TCP stack sees each packet.
 
@@ -18,17 +18,17 @@ Client SYN → NIC → XDP hook
 
 Load profile: 100 → 32,000 req/s over 3 minutes (k6 ramping-arrival-rate), no think time.
 
-**Test setup:** 10 machines each running a Go HTTP backend. nginx, haproxy, envoy, and kong are each deployed as a single proxy node in front of all 10 backends, load balancing across them in the traditional way. AION runs differently — one aixker-agent is co-located on each of those same 10 backend machines, forming a self-organizing cluster with no separate proxy node.
+**Test setup:** 10 machines each running a Go HTTP backend. nginx, haproxy, envoy, and kong are each deployed as a single proxy node in front of all 10 backends, load balancing across them in the traditional way. aixker runs differently — one agent is co-located on each of those same 10 backend machines, forming a self-organizing cluster with no separate proxy node.
 
 | Target | Throughput | p95 latency | Avg latency | Failures |
 |---|---|---|---|---|
-| **AION** (10 agents, embedded) | **4,700 req/s** | **91.5 ms** | **23.4 ms** | **0.00%** |
+| **aixker** (10 agents, embedded) | **4,700 req/s** | **91.5 ms** | **23.4 ms** | **0.00%** |
 | nginx (1 proxy → 10 backends) | 1,622 req/s | 1,390 ms | 887 ms | 4.94% |
 | haproxy (1 proxy → 10 backends) | 1,329 req/s | 1,040 ms | 704 ms | 9.79% |
 | envoy (1 proxy → 10 backends) | 1,388 req/s | ~60,000 ms ⚠ | 3,300 ms | 6.77% |
 | kong (1 proxy → 10 backends) | 2,631 req/s | 1,600 ms | 479 ms | 75.67% ⚠ |
 
-AION delivers **2.9× nginx throughput** and **zero failures** across all 5 runs. Every other system dropped 5–76% of requests at peak load. Kong's apparent throughput is misleading — 75% of those "fast" responses are immediate rejections.
+aixker delivers **2.9× nginx throughput** and **zero failures** across all 5 runs. Every other system dropped 5–76% of requests at peak load. Kong's apparent throughput is misleading — 75% of those "fast" responses are immediate rejections.
 
 ## Architecture
 
@@ -80,7 +80,7 @@ sudo docker compose -f dashboard/docker-compose.yml -f agent/docker-compose.yml 
 ### Benchmark
 
 ```bash
-# AION
+# aixker
 k6 run test/k6-v2.js
 
 # nginx / haproxy / envoy / kong
@@ -112,7 +112,7 @@ Internet
     ↓
 nginx / haproxy   — SSL termination, L7 routing, WAF
     ↓
-AION cluster      — L4 high-throughput distribution, AI-driven, no SPOF
+aixker cluster    — L4 high-throughput distribution, AI-driven, no SPOF
     ↓
 Backend services
 ```
