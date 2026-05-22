@@ -1,15 +1,19 @@
 FROM rust:1.92-bookworm AS builder
 
 WORKDIR /app
-COPY Cargo.* ./
+COPY agent/Cargo.* ./
 RUN mkdir src && echo 'fn main() {}' > src/main.rs
 RUN cargo build --release
 RUN rm -rf src
 
-COPY ./certificates ./certificates
-COPY ./src ./src
-COPY ./src/libebpf.so ./src/libebpf.so
+COPY agent/certificates ./certificates
+COPY agent/src ./src
 RUN cargo build --release
+
+FROM golang:1.22-bookworm AS gobuilder
+WORKDIR /backend
+COPY the-backend/ ./
+RUN GO111MODULE=off go build -o /backend-server main.go
 
 FROM debian:bookworm-slim
 
@@ -18,16 +22,16 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y ca-certificates python3 iproute2 iputils-ping sudo procps && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/target/release/aixker-agent ./aixker-agent
+COPY --from=gobuilder /backend-server ./backend-server
 COPY --from=builder /app/certificates ./certificates
-COPY ./models/model-128.json ./
-COPY ./config.toml ./
-COPY ./src/libebpf.so ./libebpf.so
-COPY ./scripts/mock.py ./mock.py
-COPY ./scripts/server.py ./server.py
-COPY ./scripts/arp /arp
+COPY agent/models/model-128.json ./
+COPY agent/config.toml ./
+COPY agent/src/libebpf.so ./libebpf.so
+COPY agent/scripts/mock.py ./mock.py
+COPY agent/scripts/arp /arp
 
 ENV CERT_PATH="./certificates/cert.pem" KEY_PATH="./certificates/key.pem"
 ENV LIBEBPF_PATH=./libebpf.so
 # ENV RUST_LOG=info
 
-CMD ["sh", "-c", "sudo ./aixker-agent & python3 ./mock.py & python3 ./server.py"]
+CMD ["sh", "-c", "sudo ./aixker-agent & python3 ./mock.py & python3 ./server.py & ./backend-server"]
