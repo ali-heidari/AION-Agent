@@ -2,55 +2,17 @@
 
 ![AIxKer Logo](docs/aixker-logo.svg)
 
-A distributed AI-driven L4 load balancer written in Rust. Runs a reinforcement-learning agent on each node alongside an eBPF/XDP kernel-bypass NAT engine.
-
-**routing decisions happen inside the kernel before the TCP stack sees each packet.**
+- A distributed AI-driven L4 load balancer written in Rust. 
+- Runs a reinforcement-learning agent on each node alongside an eBPF/XDP kernel-bypass NAT engine.
+- **Routing decisions happen inside the kernel before the TCP stack sees each packet.**
 
 ## How it works
 
-Each node runs one agent process. The RL model (`aixker_rlt`) reads system metrics and decides when the local node is overloaded (`BUSY`). When busy, the agent picks a free peer from the cluster, writes that peer's address into the `SERVERMAP` BPF map, and the XDP program starts redirecting all new TCP SYNs directly to that peer at NIC level — no userspace, no socket buffers.
+Each node runs one agent process. The RL model (`aixker_rlt`) reads system metrics and decides when the local node is overloaded (`BUSY`).
+
+When busy, the agent picks a free peer from the cluster, writes that peer's address into the `SERVERMAP` BPF map, and the XDP program starts redirecting all new TCP SYNs directly to that peer at NIC level — no userspace, no socket buffers.
 
 Peers discover each other via UDP multicast gossip (`aion_transporter`). No central registry, no single point of failure.
-
-```mermaid
-flowchart TD
-    subgraph Node A ["Node A  (BUSY)"]
-        NIC_A["NIC"]
-        XDP_A["XDP Hook\n(kernel)"]
-        SM_A[("SERVERMAP\nBPF map")]
-        AGENT_A["Agent Process\naixker-agent"]
-        RL["RL Model\naixker-rlt\n→ BUSY"]
-        METRICS["System Metrics\nCPU · mem · conn"]
-        BACKEND_A["Backend Service"]
-    end
-
-    subgraph Node B ["Node B  (FREE)"]
-        NIC_B["NIC"]
-        XDP_B["XDP Hook\n(kernel)"]
-        BACKEND_B["Backend Service"]
-        AGENT_B["Agent Process\naixker-agent"]
-    end
-
-    subgraph Gossip ["Cluster Gossip  —  aion-transporter"]
-        UDP["UDP Multicast\npeer state exchange"]
-    end
-
-    CLIENT["Client"] -->|TCP SYN| NIC_A
-    NIC_A --> XDP_A
-    XDP_A -->|check SERVERMAP| SM_A
-    SM_A -->|redirect target = Node B| XDP_A
-    XDP_A -->|rewrite IP · MAC · port\nXDP_REDIRECT| NIC_B
-    NIC_B --> XDP_B --> BACKEND_B
-
-    METRICS -->|SyntheticState| RL
-    RL -->|BUSY → pick free peer| AGENT_A
-    AGENT_A -->|write peer addr| SM_A
-
-    AGENT_A <-->|heartbeat / state| UDP
-    AGENT_B <-->|heartbeat / state| UDP
-
-    XDP_A -->|node FREE: pass through| BACKEND_A
-```
 
 ## Benchmarks
 
@@ -59,7 +21,7 @@ Load profile: 100 → 32,000 req/s over 3 minutes (k6 ramping-arrival-rate), no 
 **Test setup:** 10 machines each running a Go HTTP backend. nginx, haproxy, envoy, and kong are each deployed as a single proxy node in front of all 10 backends, load balancing across them in the traditional way. aixker runs differently — one agent is co-located on each of those same 10 backend machines, forming a self-organizing cluster with no separate proxy node.
 
 | Target | Throughput | p95 latency | Avg latency | Failures |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | **aixker** (10 agents, embedded) | **4,700 req/s** | **91.5 ms** | **23.4 ms** | **0.00%** |
 | nginx (1 proxy → 10 backends) | 1,622 req/s | 1,390 ms | 887 ms | 4.94% |
 | haproxy (1 proxy → 10 backends) | 1,329 req/s | 1,040 ms | 704 ms | 9.79% |
@@ -68,29 +30,77 @@ Load profile: 100 → 32,000 req/s over 3 minutes (k6 ramping-arrival-rate), no 
 
 aixker delivers **2.9× nginx throughput** and **zero failures** across all 5 runs. Every other system dropped 5–76% of requests at peak load. Kong's apparent throughput is misleading — 75% of those "fast" responses are immediate rejections.
 
-## Architecture
+```mermaid
+flowchart LR
+    CLIENT["Client"]
+    XDP["XDP Hook"]
+    BACKEND["Backend"]
+    PEER["Free Peer Node"]
+    AGENT["Agent"]
+    MAP[("SERVERMAP")]
 
+    CLIENT -->|TCP SYN| XDP
+    XDP -->|FREE| BACKEND
+    XDP -->|BUSY → redirect| PEER
+    AGENT -->|metrics → RL → write| MAP
+    MAP -->|redirect target| XDP
+    AGENT <-->|gossip| PEER
 ```
-AION-Agent/
-├── agent/src/main.rs           — agent core: gossip, AI loop, SERVERMAP manager, eBPF loader
-├── agent/src/metrics.rs        — system metrics → AI input (SyntheticState)
-├── agent/src/configurations.rs — config.toml loader
-├── agent/src/libebpf.so        — compiled eBPF object (embedded at build time)
-└── agent/config.toml           — runtime config (interval_secs, mode)
 
-AION-EBPF/
-└── ebpf/src/lib.rs             — XDP program: NAT engine, SYN handler, checksum rewrite
+## Getting started
+
+Each container bundles your backend service together with the AIxKer agent. The agent runs alongside your service, monitors local load, and redirects traffic at the XDP layer when the node is busy. To use AIxKer with your own service you only need to modify `agent/dockerfile`.
+
+### 1. Replace the backend build stage
+
+The default Dockerfile compiles a Go backend from `the-backend/`. Swap that stage for your own:
+
+```dockerfile
+# Replace this block:
+FROM golang:1.22-bookworm AS gobuilder
+WORKDIR /backend
+COPY the-backend/ ./
+RUN GO111MODULE=off go build -o /backend-server main.go
+
+# With your own — for example a Node.js service:
+FROM node:20-bookworm-slim AS mybuilder
+WORKDIR /app
+COPY my-service/ ./
+RUN npm ci && npm run build
 ```
 
-### BPF maps
+### 2. Copy your built binary into the final image
 
-| Map | Purpose |
-|---|---|
-| `SERVERMAP` | Current redirect target (IP + MAC) |
-| `NAT_MAP` | Per-connection 5-tuple NAT state (10,240 entries) |
-| `DEVMAP` | NIC index for `XDP_REDIRECT` |
-| `BLOCKLIST` | Dropped source IPs |
-| `PORT_COUNTER` | Per-CPU ephemeral port counter (lock-free) |
+```dockerfile
+# Replace this line:
+COPY --from=gobuilder /backend-server ./backend-server
+
+# With your own artefact:
+COPY --from=mybuilder /app/dist ./my-service
+```
+
+### 3. Start your service alongside the agent in `CMD`
+
+```dockerfile
+# Replace this line:
+CMD ["sh", "-c", "sudo ./aixker-agent & ./backend-server"]
+
+# With your own start command:
+CMD ["sh", "-c", "sudo ./aixker-agent & node ./my-service/index.js"]
+```
+
+> The agent lines (`COPY agent/models`, `COPY agent/src/libebpf.so`, `ENV LIBEBPF_PATH`, `sudo ./aixker-agent`) must be kept as-is — only the backend stage changes.
+
+### 4. Build and run
+
+```bash
+docker build -f agent/dockerfile -t my-aixker-node .
+docker run --cap-add NET_ADMIN --cap-add SYS_ADMIN --cap-add BPF \
+           --security-opt seccomp:unconfined \
+           --network host my-aixker-node
+```
+
+Deploy the same image on every backend node. The agents discover each other automatically via UDP multicast gossip — no configuration needed.
 
 ## Quick start
 
