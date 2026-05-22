@@ -321,84 +321,60 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
     loop {
         let is_busy = busy || ME.lock().unwrap().state == 0;
         if is_busy {
-            // Validate current target: must be state=2 in cache AND reachable via ping.
-            // One ICMP per interval_secs; dead targets detected in ≤50ms not ≤10s.
-            let (current_still_valid, failed_target) = if let Some(id) = &current_target {
-                let in_cache = {
-                    let agents = CACHE.read().unwrap();
-                    agents.get(id.as_str()).map_or(false, |a| a.state == 2)
-                };
-                if in_cache {
+            // Single parallel ping round covering all candidates including current target.
+            // Eliminates the sequential double-ping (validate then search) that added ≤100ms
+            // to failover; now worst-case is one 50ms round regardless of outcome.
+            let mut agents_snapshot: Vec<Agent> = {
+                let agents = CACHE.read().unwrap();
+                agents
+                    .iter()
+                    .filter(|(k, v)| {
+                        k.parse::<Ipv4Addr>().map(u32::from).unwrap_or(local_ip) != local_ip
+                            && v.state != 0
+                    })
+                    .map(|(_, v)| v.clone())
+                    .collect()
+            };
+            rand::seq::SliceRandom::shuffle(
+                agents_snapshot.as_mut_slice(),
+                &mut rand::thread_rng(),
+            );
+
+            let mut join_set = tokio::task::JoinSet::new();
+            for agent in &agents_snapshot {
+                let id = agent.identifier.clone();
+                join_set.spawn(async move {
                     let out = tokio::process::Command::new("ping")
-                        .args(["-c", "1", "-W", "0.05", id.as_str()])
+                        .args(["-c", "1", "-W", "0.05", &id])
                         .output()
                         .await
                         .expect("ping failed");
-                    let alive = !String::from_utf8_lossy(&out.stdout).contains("100% packet loss");
-                    // Do not call send_off_machine here: transient ICMP failures under load
-                    // would broadcast false deaths and cascade evictions across the cluster.
-                    // The search loop below calls send_off_machine after deliberate multi-ping.
-                    (alive, if alive { None } else { Some(id.clone()) })
-                } else {
-                    (false, None)
-                }
-            } else {
-                (false, None)
-            };
+                    let alive = !String::from_utf8_lossy(&out.stdout)
+                        .contains("100% packet loss");
+                    (id, alive)
+                });
+            }
+
+            let mut ping_results: HashMap<String, bool> = HashMap::new();
+            while let Some(res) = join_set.join_next().await {
+                let (id, alive) = res.expect("ping task panicked");
+                ping_results.insert(id, alive);
+            }
+
+            let current_still_valid = current_target
+                .as_deref()
+                .map_or(false, |t| *ping_results.get(t).unwrap_or(&false));
 
             if current_still_valid {
                 found_agent = true;
             } else {
                 current_target = None;
-                // Clear SERVERMAP immediately so new SYNs during the search get a fast
-                // RST from the kernel rather than timing out against the dead target.
-                // In-flight connections are unaffected — they live in NAT_MAP entries.
                 let _ = server_map.remove(&0);
-                let mut agents_snapshot: Vec<Agent> = {
-                    let agents = CACHE.read().unwrap();
-                    agents
-                        .iter()
-                        .filter(|(k, v)| {
-                            k.parse::<Ipv4Addr>().map(u32::from).unwrap_or(local_ip) != local_ip
-                                && v.state != 0
-                                && Some(k.as_str()) != failed_target.as_deref()
-                        })
-                        .map(|(_, v)| v.clone())
-                        .collect()
-                };
-                rand::seq::SliceRandom::shuffle(
-                    agents_snapshot.as_mut_slice(),
-                    &mut rand::thread_rng(),
-                );
-
-                let mut join_set = tokio::task::JoinSet::new();
-                for agent in &agents_snapshot {
-                    let id = agent.identifier.clone();
-                    join_set.spawn(async move {
-                        let out = tokio::process::Command::new("ping")
-                            .args(["-c", "1", "-W", "0.05", &id])
-                            .output()
-                            .await
-                            .expect("ping failed");
-                        let alive = !String::from_utf8_lossy(&out.stdout)
-                            .contains("100% packet loss");
-                        (id, alive)
-                    });
-                }
-
-                let mut ping_results: HashMap<String, bool> = HashMap::new();
-                while let Some(res) = join_set.join_next().await {
-                    let (id, alive) = res.expect("ping task panicked");
-                    ping_results.insert(id, alive);
-                }
 
                 for agent in &agents_snapshot {
-                    let alive = *ping_results.get(&agent.identifier).unwrap_or(&false);
-                    if !alive {
-                        send_off_machine(&agent.identifier).await;
+                    if !ping_results.get(&agent.identifier).unwrap_or(&false) {
                         continue;
                     }
-
                     if agent.state == 2 {
                         let ipv4_addr: Ipv4Addr = agent.identifier.parse().unwrap();
                         let ip_as_u32: u32 = ipv4_addr.into();
@@ -420,7 +396,6 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
                         server_map
                             .insert(0, data, 0)
                             .expect("No server details defined!");
-
                         current_target = Some(agent.identifier.clone());
                         found_agent = true;
                         break;
