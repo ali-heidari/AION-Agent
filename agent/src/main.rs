@@ -330,7 +330,7 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
                     .iter()
                     .filter(|(k, v)| {
                         k.parse::<Ipv4Addr>().map(u32::from).unwrap_or(local_ip) != local_ip
-                            && v.state != 0
+                            && v.state == 2
                     })
                     .map(|(_, v)| v.clone())
                     .collect()
