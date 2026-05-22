@@ -1,0 +1,53 @@
+<svg width="680" height="160" viewBox="0 0 680 160" role="img" xmlns="http://www.w3.org/2000/svg">
+  <title>Aixker logo</title>
+  <desc>Aixker logo with concentric hexagon layers in electric blue and wordmark</desc>
+
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0C1A2E"/>
+      <stop offset="100%" stop-color="#0D2F4F"/>
+    </linearGradient>
+  </defs>
+  <rect width="680" height="160" rx="16" ry="16" fill="url(#bgGrad)"/>
+
+  <!-- Outer hexagon ring -->
+  <polygon points="210,25 257.6,52.5 257.6,107.5 210,135 162.4,107.5 162.4,52.5"
+    fill="none" stroke="#0EA5E9" stroke-width="1" opacity="0.22"/>
+  <circle cx="210"   cy="25"    r="3" fill="#0EA5E9" opacity="0.28"/>
+  <circle cx="257.6" cy="52.5"  r="3" fill="#0EA5E9" opacity="0.28"/>
+  <circle cx="257.6" cy="107.5" r="3" fill="#0EA5E9" opacity="0.28"/>
+  <circle cx="210"   cy="135"   r="3" fill="#0EA5E9" opacity="0.28"/>
+  <circle cx="162.4" cy="107.5" r="3" fill="#0EA5E9" opacity="0.28"/>
+  <circle cx="162.4" cy="52.5"  r="3" fill="#0EA5E9" opacity="0.28"/>
+
+  <!-- Middle hexagon ring -->
+  <polygon points="210,43 242.1,61.5 242.1,98.5 210,117 177.9,98.5 177.9,61.5"
+    fill="none" stroke="#0EA5E9" stroke-width="1.5" opacity="0.55"/>
+  <circle cx="210"   cy="43"   r="2.5" fill="#0EA5E9" opacity="0.65"/>
+  <circle cx="242.1" cy="61.5" r="2.5" fill="#0EA5E9" opacity="0.65"/>
+  <circle cx="242.1" cy="98.5" r="2.5" fill="#0EA5E9" opacity="0.65"/>
+  <circle cx="210"   cy="117"  r="2.5" fill="#0EA5E9" opacity="0.65"/>
+  <circle cx="177.9" cy="98.5" r="2.5" fill="#0EA5E9" opacity="0.65"/>
+  <circle cx="177.9" cy="61.5" r="2.5" fill="#0EA5E9" opacity="0.65"/>
+
+  <!-- Inner hexagon — solid fill -->
+  <polygon points="210,60 227.3,70 227.3,90 210,100 192.7,90 192.7,70"
+    fill="#0EA5E9"/>
+
+  <!-- Centre dot -->
+  <circle cx="210" cy="80" r="3" fill="white"/>
+
+  <!-- Wordmark: Ai[x]ker — x in blue -->
+  <text x="320" y="100"
+    font-family="'Inter','SF Pro Display','Segoe UI',system-ui,sans-serif"
+    font-size="58" font-weight="700" fill="#F0F9FF">AI<tspan fill="#0EA5E9">x</tspan>Ker</text>
+
+  <!-- Tagline -->
+  <text
+    font-family="'Inter','SF Pro Display','Segoe UI',system-ui,sans-serif"
+    font-size="8.5" font-weight="400" letter-spacing="1.5" fill="#93C5FD">
+    <tspan x="322" y="112">DISTRIBUTED AI-DRIVEN L4 LOAD BALANCER</tspan>
+    <tspan x="322" dy="14">WRITTEN IN RUST</tspan>
+  </text>
+</svg>
+

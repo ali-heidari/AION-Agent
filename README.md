@@ -1,6 +1,10 @@
 # AIxKer
 
-A distributed AI-driven L4 load balancer written in Rust. Runs a reinforcement-learning agent on each node alongside an eBPF/XDP kernel-bypass NAT engine — routing decisions happen inside the kernel before the TCP stack sees each packet.
+![AIxKer Logo](docs/aixker-logo.svg)
+
+A distributed AI-driven L4 load balancer written in Rust. Runs a reinforcement-learning agent on each node alongside an eBPF/XDP kernel-bypass NAT engine.
+
+**routing decisions happen inside the kernel before the TCP stack sees each packet.**
 
 ## How it works
 
@@ -8,10 +12,44 @@ Each node runs one agent process. The RL model (`aixker_rlt`) reads system metri
 
 Peers discover each other via UDP multicast gossip (`aion_transporter`). No central registry, no single point of failure.
 
-```
-Client SYN → NIC → XDP hook
-  → check SERVERMAP → rewrite IP/MAC/port → XDP_REDIRECT → peer NIC
-  (bypasses kernel TCP/IP stack entirely)
+```mermaid
+flowchart TD
+    subgraph Node A ["Node A  (BUSY)"]
+        NIC_A["NIC"]
+        XDP_A["XDP Hook\n(kernel)"]
+        SM_A[("SERVERMAP\nBPF map")]
+        AGENT_A["Agent Process\naixker-agent"]
+        RL["RL Model\naixker-rlt\n→ BUSY"]
+        METRICS["System Metrics\nCPU · mem · conn"]
+        BACKEND_A["Backend Service"]
+    end
+
+    subgraph Node B ["Node B  (FREE)"]
+        NIC_B["NIC"]
+        XDP_B["XDP Hook\n(kernel)"]
+        BACKEND_B["Backend Service"]
+        AGENT_B["Agent Process\naixker-agent"]
+    end
+
+    subgraph Gossip ["Cluster Gossip  —  aion-transporter"]
+        UDP["UDP Multicast\npeer state exchange"]
+    end
+
+    CLIENT["Client"] -->|TCP SYN| NIC_A
+    NIC_A --> XDP_A
+    XDP_A -->|check SERVERMAP| SM_A
+    SM_A -->|redirect target = Node B| XDP_A
+    XDP_A -->|rewrite IP · MAC · port\nXDP_REDIRECT| NIC_B
+    NIC_B --> XDP_B --> BACKEND_B
+
+    METRICS -->|SyntheticState| RL
+    RL -->|BUSY → pick free peer| AGENT_A
+    AGENT_A -->|write peer addr| SM_A
+
+    AGENT_A <-->|heartbeat / state| UDP
+    AGENT_B <-->|heartbeat / state| UDP
+
+    XDP_A -->|node FREE: pass through| BACKEND_A
 ```
 
 ## Benchmarks
@@ -96,15 +134,6 @@ k6 run --env TARGET=kong     test/k6-v2.js
 - `CAP_BPF`, `CAP_NET_ADMIN`, `CAP_SYS_ADMIN`
 - For containers: `privileged: true` + `network_mode: host`
 
-## Known limitations
-
-- No SSL/TLS termination — pair nginx at the edge for HTTPS
-- No L7 routing (URL paths, headers, HTTP/2)
-- No admin API or Prometheus metrics endpoint yet
-- Gossip has no authentication — any node on the subnet can inject state
-- `BLOCKLIST` entry (`192.168.100.100`) is hardcoded in `main.rs`
-- Stale `NAT_MAP` entries accumulate (only cleaned on RST, not FIN)
-
 ## Recommended two-tier deployment
 
 ```
@@ -128,6 +157,15 @@ Contributions are welcome. Please open issues or pull requests.
 ## Donations
 
 Support this project: [Open Collective](https://opencollective.com/aixkernel)
+
+## AIxKer Projects
+
+| Project | Role |
+| --- | --- |
+| [aixker-rlt](https://github.com/ali-heidari/aixker-rlt) | Reinforcement-learning model — classifies node state (`FREE`/`BUSY`) and selects redirect targets |
+| [aion-transporter](https://github.com/ali-heidari/aion-transporter) | UDP multicast gossip layer — peer discovery and cluster membership with no central registry |
+| [aion-math](https://github.com/ali-heidari/aion-math) | Lightweight math utilities used by the RL agent for metric normalization and scoring |
+| [AION-EBPF](https://github.com/ali-heidari/AION-EBPF) | XDP/eBPF kernel program — NAT engine, SYN handler, and checksum rewrite running at NIC level |
 
 ## License
 
