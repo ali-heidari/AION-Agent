@@ -1,0 +1,27 @@
+_format_version: "3.0"
+
+upstreams:
+- name: agents
+  algorithm: round-robin
+  targets:
+  - target: 192.168.100.70:8123
+  - target: 192.168.100.71:8123
+  - target: 192.168.100.72:8123
+  - target: 192.168.100.73:8123
+  - target: 192.168.100.74:8123
+  - target: 192.168.100.75:8123
+  - target: 192.168.100.76:8123
+  - target: 192.168.100.77:8123
+  - target: 192.168.100.78:8123
+  - target: 192.168.100.79:8123
+
+services:
+- name: agents-service
+  host: agents
+  port: 80
+  protocol: http
+  routes:
+  - name: agents-route
+    paths:
+    - /
+    strip_path: false

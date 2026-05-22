@@ -1,0 +1,10 @@
+FROM golang:1.22-alpine AS builder
+WORKDIR /build
+COPY the-backend/main.go ./
+RUN GO111MODULE=off go build -o /backend-server main.go
+
+FROM alpine:3.21
+RUN apk add --no-cache python3
+COPY --from=builder /backend-server /backend-server
+COPY agent/scripts/mock.py ./mock.py
+CMD ["sh", "-c", "python3 ./mock.py & ./backend-server"]

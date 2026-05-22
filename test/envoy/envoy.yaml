@@ -1,0 +1,73 @@
+static_resources:
+  listeners:
+  - name: listener_0
+    address:
+      socket_address:
+        address: 0.0.0.0
+        port_value: 80
+    filter_chains:
+    - filters:
+      - name: envoy.filters.network.http_connection_manager
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+          stat_prefix: ingress_http
+          route_config:
+            name: local_route
+            virtual_hosts:
+            - name: agents
+              domains: ["*"]
+              routes:
+              - match:
+                  prefix: "/"
+                route:
+                  cluster: agents
+          http_filters:
+          - name: envoy.filters.http.router
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+  clusters:
+  - name: agents
+    connect_timeout: 5s
+    type: STATIC
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: agents
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address: { address: 192.168.100.70, port_value: 8123 }
+        - endpoint:
+            address:
+              socket_address: { address: 192.168.100.71, port_value: 8123 }
+        - endpoint:
+            address:
+              socket_address: { address: 192.168.100.72, port_value: 8123 }
+        - endpoint:
+            address:
+              socket_address: { address: 192.168.100.73, port_value: 8123 }
+        - endpoint:
+            address:
+              socket_address: { address: 192.168.100.74, port_value: 8123 }
+        - endpoint:
+            address:
+              socket_address: { address: 192.168.100.75, port_value: 8123 }
+        - endpoint:
+            address:
+              socket_address: { address: 192.168.100.76, port_value: 8123 }
+        - endpoint:
+            address:
+              socket_address: { address: 192.168.100.77, port_value: 8123 }
+        - endpoint:
+            address:
+              socket_address: { address: 192.168.100.78, port_value: 8123 }
+        - endpoint:
+            address:
+              socket_address: { address: 192.168.100.79, port_value: 8123 }
+
+admin:
+  address:
+    socket_address:
+      address: 0.0.0.0
+      port_value: 9901

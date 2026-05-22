@@ -1,13 +1,11 @@
 name: aixker-no_agent
 
 x-mock: &mock
-  image: golang:1.22-alpine
-  command: sh -c "apk add --no-cache python3 && python3 /mock.py & go run /main.go"
+  build:
+    context: ..
+    dockerfile: test/dockerfile
   mem_limit: 128m
   cpus: 1.0
-  volumes:
-    - ../agent/scripts/mock.py:/mock.py:ro
-    - ../the-backend/main.go:/main.go:ro
 
 services:
   mock-70:
@@ -86,6 +84,27 @@ services:
     networks:
       mymacvlan:
         ipv4_address: 192.168.100.81
+
+  envoy:
+    image: envoyproxy/envoy:v1.32-latest
+    volumes:
+      - ./envoy/envoy.yaml:/etc/envoy/envoy.yaml:ro
+    networks:
+      mymacvlan:
+        ipv4_address: 192.168.100.82
+
+  kong:
+    image: kong:3.9-alpine
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong.yml
+      KONG_PROXY_LISTEN: "0.0.0.0:80"
+      KONG_ADMIN_LISTEN: "off"
+    volumes:
+      - ./kong/kong.yml:/kong.yml:ro
+    networks:
+      mymacvlan:
+        ipv4_address: 192.168.100.83
 
 networks:
   mymacvlan:

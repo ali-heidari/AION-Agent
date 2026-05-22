@@ -34,4 +34,4 @@ ENV CERT_PATH="./certificates/cert.pem" KEY_PATH="./certificates/key.pem"
 ENV LIBEBPF_PATH=./libebpf.so
 # ENV RUST_LOG=info
 
-CMD ["sh", "-c", "sudo ./aixker-agent & python3 ./mock.py & python3 ./server.py & ./backend-server"]
+CMD ["sh", "-c", "sudo ./aixker-agent & python3 ./mock.py & ./backend-server"]
