@@ -457,10 +457,7 @@ async fn main() -> Result<()> {
         load_ebf(busy).await.expect("Can't load the ebpf!");
     });
 
-    tokio::select! {
-        _ = tokio::signal::ctrl_c() => {},
-        _ = std::future::pending::<()>() => {},
-    }
+    std::future::pending::<()>().await;
 
     Ok(())
 }
