@@ -8,6 +8,6 @@ input_number=6
 output_number=3
 hidden_layers=16
 reply_capacity=4096
-model_name="model-128.json"
+model_name="default-model.json"
 log_interval=64
 mode="Infer"
