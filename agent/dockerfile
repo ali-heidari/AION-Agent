@@ -1,6 +1,7 @@
 FROM rust:1.92-bookworm AS builder
 
 WORKDIR /app
+COPY Cargo.lock ./
 COPY agent/Cargo.* ./
 RUN mkdir src && echo 'fn main() {}' > src/main.rs
 RUN cargo build --release
