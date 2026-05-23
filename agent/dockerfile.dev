@@ -3,11 +3,11 @@ WORKDIR /backend
 COPY the-backend/ ./
 RUN GO111MODULE=off go build -o /backend-server main.go
 
-FROM ghcr.io/ali-heidari/aixker-agent:latest
+FROM aixker:agent
 
 RUN apt-get update && apt-get install -y python3 && rm -rf /var/lib/apt/lists/*
 
 COPY --from=gobuilder /backend-server ./backend-server
 COPY agent/scripts/mock.py ./mock.py
 
-CMD ["sh", "-c", "sudo ./aixker-agent & python3 ./mock.py & ./backend-server"]
+CMD ["sh", "-c", "./aixker-agent & python3 ./mock.py & ./backend-server"]
