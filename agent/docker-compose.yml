@@ -1,10 +1,10 @@
 name: aixker-agents
 
 x-agent: &agent
-  image: aixker-agent
+  image: aixker-agent-dev
   build:
     context: ..
-    dockerfile: agent/dockerfile
+    dockerfile: agent/dockerfile.dev
   cap_add:
     - NET_ADMIN
     - SYS_ADMIN
