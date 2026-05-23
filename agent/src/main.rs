@@ -235,7 +235,7 @@ async fn start_predicting() -> Result<()> {
         move |lowest_state| get_features(&mut cloned_state.lock().unwrap(), lowest_state),
         |x, y, c| represent(x, y as u8, c),
         CONFIG.get().unwrap().mode,
-        &CONFIG.get().unwrap().model_name,
+        "default",
     )
     .await;
 
