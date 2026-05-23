@@ -9,26 +9,19 @@ RUN rm -rf src
 COPY agent/src ./src
 RUN cargo build --release
 
-FROM golang:1.22-bookworm AS gobuilder
-WORKDIR /backend
-COPY the-backend/ ./
-RUN GO111MODULE=off go build -o /backend-server main.go
-
 FROM debian:bookworm-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y ca-certificates python3 iproute2 iputils-ping sudo procps && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y ca-certificates iproute2 iputils-ping sudo procps && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/target/release/aixker-agent ./aixker-agent
-COPY --from=gobuilder /backend-server ./backend-server
 COPY agent/models/model-128.json ./
 COPY agent/config.toml ./
 COPY agent/src/libebpf.so ./libebpf.so
-COPY agent/scripts/mock.py ./mock.py
 COPY agent/scripts/arp /arp
 
 ENV LIBEBPF_PATH=./libebpf.so
 # ENV RUST_LOG=info
 
-CMD ["sh", "-c", "sudo ./aixker-agent & python3 ./mock.py & ./backend-server"]
+CMD ["sudo", "./aixker-agent"]
