@@ -26,4 +26,4 @@ COPY agent/scripts/arp /arp
 ENV LIBEBPF_PATH=./libebpf.so
 # ENV RUST_LOG=info
 
-CMD ["sudo", "./aixker-agent"]
+CMD ["./aixker-agent"]
