@@ -8,7 +8,7 @@ RUN cargo build --release
 RUN rm -rf src
 
 COPY agent/src ./src
-RUN cargo build --release
+RUN touch src/main.rs && cargo build --release
 
 FROM debian:bookworm-slim
 
