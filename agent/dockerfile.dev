@@ -3,7 +3,7 @@ WORKDIR /backend
 COPY the-backend/ ./
 RUN GO111MODULE=off go build -o /backend-server main.go
 
-FROM aixker:agent
+FROM ghcr.io/ali-heidari/aixker-agent:latest
 
 RUN apt-get update && apt-get install -y python3 && rm -rf /var/lib/apt/lists/*
 
