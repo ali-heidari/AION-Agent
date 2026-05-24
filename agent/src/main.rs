@@ -146,7 +146,7 @@ pub fn represent(features: &[f32], action: u8, counter: u32) -> (f32, bool) {
 
 async fn on_data_received(address: SocketAddr, data: &[u8]) {
     let message = String::from_utf8(data.to_vec()).unwrap();
-
+    println!("Received from {}: {}", address, message);
     if message.contains('=') {
         {
             let mut cache = CACHE.write().unwrap();
@@ -397,6 +397,7 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
                             .insert(0, data, 0)
                             .expect("No server details defined!");
                         current_target = Some(agent.identifier.clone());
+                        println!("Redirecting to agent {} at {}", agent.identifier, ipv4_addr);
                         found_agent = true;
                         break;
                     }
