@@ -71,13 +71,13 @@ Create the network:
 sudo docker network create -d macvlan \
   --subnet=192.168.1.0/24 \
   --gateway=192.168.1.1 \
-  -o parent=wlp3s0 mymacvlan
+  -o parent=DEFAULT-INTERFACE mymacvlan
 ```
 
 Allow host access:
 
 ```bash
-sudo ip link add link wlp3s0 name host_link type macvlan mode bridge
+sudo ip link add link DEFAULT-INTERFACE name host_link type macvlan mode bridge
 sudo ip addr add 192.168.1.254/24 dev host_link
 sudo ip link set dev host_link up
 ```

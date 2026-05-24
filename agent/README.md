@@ -78,13 +78,13 @@ sudo docker run -it --rm --net=container:aaa nicolaka/netshoot tcpdump -i eth0 -
 Add network:
 
 ```bash
-sudo docker network create -d macvlan --subnet=192.168.100.0/24 --gateway=192.168.100.1 -o parent=wlp3s0 mymacvlan
+sudo docker network create -d macvlan --subnet=192.168.100.0/24 --gateway=192.168.100.1 -o parent=DEFAULT-INTERFACE mymacvlan
 ```
 
 Access from host:
 
 ```bash
-sudo ip link add link wlp3s0 name host_link type macvlan mode bridge
+sudo ip link add link DEFAULT-INTERFACE name host_link type macvlan mode bridge
 sudo ip addr add 192.168.100.254/24 dev host_link
 sudo ip link set dev host_link up
 ```
