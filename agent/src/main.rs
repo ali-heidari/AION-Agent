@@ -292,7 +292,7 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
 
     xdp.load().context("Failed to load XDP program")?;
 
-    xdp.attach(interface_name, aya::programs::XdpMode::default())
+    xdp.attach(interface_name, aya::programs::XdpMode::Skb)
         .context("Failed to attach XDP to default interface!")?;
 
     println!(
