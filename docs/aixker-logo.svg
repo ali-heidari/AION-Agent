@@ -46,7 +46,7 @@
   <text
     font-family="'Inter','SF Pro Display','Segoe UI',system-ui,sans-serif"
     font-size="8.5" font-weight="400" letter-spacing="1.5" fill="#93C5FD">
-    <tspan x="322" y="112">DISTRIBUTED AI-DRIVEN L4 LOAD BALANCER</tspan>
+    <tspan x="322" y="112">DISTRIBUTED AI-DRIVEN L2 LOAD BALANCER</tspan>
     <tspan x="322" dy="14">WRITTEN IN RUST</tspan>
   </text>
 </svg>
