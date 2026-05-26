@@ -345,7 +345,7 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
                 let id = agent.identifier.clone();
                 join_set.spawn(async move {
                     let out = tokio::process::Command::new("ping")
-                        .args(["-c", "1", "-W", "0.05", &id])
+                        .args(["-c", "1", "-W", "0.1", &id])
                         .output()
                         .await
                         .expect("ping failed");
