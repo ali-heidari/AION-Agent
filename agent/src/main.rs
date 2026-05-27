@@ -300,11 +300,6 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
         interface_name
     );
 
-    let mut devmap: aya::maps::DevMap<_> = bpf.map_mut("DEVMAP").unwrap().try_into()?;
-    let ifindex = nix::net::if_::if_nametoindex(interface_name)?;
-    println!("Redirecting to ifindex {}", ifindex);
-    devmap.set(0, ifindex, None, 0)?;
-
     let mut blocklist: aya::maps::HashMap<_, u32, u32> =
         aya::maps::HashMap::try_from(bpf.map_mut("BLOCKLIST").unwrap())?;
     let block_addr: u32 = std::net::Ipv4Addr::new(192, 168, 100, 100).into();
