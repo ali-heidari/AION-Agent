@@ -17,6 +17,7 @@ use std::sync::RwLock;
 use std::sync::{Arc, Mutex};
 
 use crate::configurations::load_config;
+use aixker_rlt::configurations::Configurations;
 use crate::get_mac_from_arp::get_mac_from_arp;
 use crate::metrics::{DatasetMode, SyntheticState};
 
@@ -229,7 +230,8 @@ async fn start_predicting() -> Result<()> {
     let state = Arc::new(Mutex::new(dataset));
     let cloned_state = Arc::clone(&state);
 
-    aixker_rlt::initialize(load_config().unwrap());
+    let agent_config = load_config().unwrap();
+    aixker_rlt::initialize(Arc::new(Configurations::from(agent_config.as_ref())));
 
     Node::start(
         move |lowest_state| get_features(&mut cloned_state.lock().unwrap(), lowest_state),
@@ -431,19 +433,24 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
 async fn main() -> Result<()> {
     env_logger::init();
 
-    let mut busy = false;
+    let startup_config = load_config().unwrap();
+    let mut busy = startup_config.busy;
+    let mut neighbor = startup_config.neighbor.clone();
 
     let args: Vec<String> = env::args().collect();
     if args.len() > 2 {
         let option = &args[2];
         if option.eq("neighbor") {
             if args.len() > 3 {
-                let neighbor = &args[3];
-                add_agents((neighbor.to_string() + ",2").as_str(), '|');
+                neighbor = args[3].clone();
             }
         } else if option.eq("busy") {
             busy = true;
         }
+    }
+
+    if !neighbor.is_empty() {
+        add_agents((neighbor + ",2").as_str(), '|');
     }
 
     listen_to_agents().await;

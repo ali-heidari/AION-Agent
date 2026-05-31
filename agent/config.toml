@@ -11,3 +11,5 @@ reply_capacity=4096
 model_name="model.json"
 log_interval=64
 mode="Infer"
+busy=false
+neighbor=""
