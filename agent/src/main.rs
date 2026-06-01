@@ -95,9 +95,7 @@ impl Agent {
 
             if agent.mac == [0u8; 6] {
                 agent.mac = get_mac_from_arp(agent.identifier.parse().unwrap())
-                    .expect(
-                        format!("Failed to resolve MAC address for {}", agent.identifier).as_str(),
-                    )
+                    .unwrap_or_else(|| panic!("Failed to resolve MAC address for {}", agent.identifier))
                     .0;
             }
 
@@ -132,7 +130,7 @@ fn add_agents(details: &str, separator: char) {
     }
 }
 
-pub fn represent(features: &[f32], action: u8, counter: u32) -> (f32, bool) {
+pub fn represent(_features: &[f32], action: u8, _counter: u32) -> (f32, bool) {
     let mut me = ME.lock().unwrap();
     if me.state != action {
         me.state = action;
@@ -187,11 +185,15 @@ async fn send_hello(action: u8, include_mac: bool) {
                 .as_str()
     }
 
-    if let Err(error) = multicast::send(message.as_str()).await {}
+    if let Err(error) = multicast::send(message.as_str()).await {
+        println!("Failed to send multicast message: {:?}", error);
+    }
 }
-async fn send_off_machine(ip: &str) {
+
+async fn _send_off_machine(ip: &str) {
     let message = ip.to_string() + "=-1";
     if let Err(error) = multicast::send(message.as_str()).await {
+        println!("Failed to send multicast message: {:?}", error);
     }
 }
 
@@ -365,7 +367,7 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
 
             let current_still_valid = current_target
                 .as_deref()
-                .map_or(false, |t| *ping_results.get(t).unwrap_or(&false));
+                .is_some_and(|t| *ping_results.get(t).unwrap_or(&false));
 
             if current_still_valid {
                 found_agent = true;
@@ -399,7 +401,7 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
                             .insert(0, data, 0)
                             .expect("No server details defined!");
                         current_target = Some(agent.identifier.clone());
-                        println!("Redirecting to agent {} at {}", agent.identifier, ipv4_addr);
+                        println!("Redirecting to agent {} at {}", agent.stringify(), ipv4_addr);
                         found_agent = true;
                         break;
                     }
