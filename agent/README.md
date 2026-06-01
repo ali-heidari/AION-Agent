@@ -95,6 +95,16 @@ Run container with macvlan network:
 sudo docker run -it --name lll --cap-add=NET_ADMIN --cap-add=SYS_ADMIN --memory=50M --cpus=1 --network=mymacvlan --ip=192.168.100.70 aixker-agent
 ```
 
+```bash
+# On VPS
+mapfile -t my_array < <(ip link show | grep -oE 'veth[A-Za-z0-9_-]+' | sort -u)
+
+for item in "${my_array[@]}"; do
+    sudo ethtool -K "${item}" tx off
+    echo "Match found: $item"
+done
+```
+
 ### Docker Compose
 
 `docker-compose.yml` launches 10 agents with static IPs `192.168.100.60–69` on the `mymacvlan` network. Create the macvlan network first (see above) if it doesn't exist.
