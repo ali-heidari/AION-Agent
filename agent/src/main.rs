@@ -318,6 +318,10 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
         aya::maps::HashMap::try_from(bpf.map_mut("SERVERMAP").unwrap()).unwrap();
     let mut found_agent: bool = false;
     let mut current_target: Option<String> = None;
+    // Consecutive failed health probes for current_target before we fail over.
+    // Absorbs transient ping loss so a single dropped probe doesn't cause a flap.
+    let mut current_misses: u32 = 0;
+    const MISS_THRESHOLD: u32 = 3;
 
     let ip = local_ip().unwrap();
     let local_ip: u32 = ip.to_string().parse::<Ipv4Addr>().unwrap().into();
@@ -349,7 +353,7 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
                 let id = agent.identifier.clone();
                 join_set.spawn(async move {
                     let out = tokio::process::Command::new("ping")
-                        .args(["-c", "1", "-W", "0.1", &id])
+                        .args(["-c", "1", "-W", "0.3", &id])
                         .output()
                         .await
                         .expect("ping failed");
@@ -365,16 +369,26 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
                 ping_results.insert(id, alive);
             }
 
-            let current_still_valid = current_target
+            let current_alive = current_target
                 .as_deref()
                 .is_some_and(|t| *ping_results.get(t).unwrap_or(&false));
 
-            if current_still_valid {
+            if current_alive {
+                // Current target healthy: leave SERVERMAP untouched, reset miss count.
+                current_misses = 0;
+                found_agent = true;
+            } else if current_target.is_some() && current_misses + 1 < MISS_THRESHOLD {
+                // Tolerate transient ping loss: hold the current target (SERVERMAP
+                // untouched) until MISS_THRESHOLD consecutive misses, so a single
+                // dropped probe doesn't trigger a needless failover.
+                current_misses += 1;
                 found_agent = true;
             } else {
-                current_target = None;
-                let _ = server_map.remove(&0);
-
+                // Current target is gone (or never set): pick a replacement and
+                // overwrite SERVERMAP *in place*. We never remove(&0) before we have a
+                // successor — an empty SERVERMAP window XDP_PASSes in-flight SYNs to a
+                // port nothing listens on, which produces the `dial: i/o timeout` bursts.
+                let mut replaced = false;
                 for agent in &agents_snapshot {
                     if !ping_results.get(&agent.identifier).unwrap_or(&false) {
                         continue;
@@ -401,10 +415,17 @@ async fn load_ebf(busy: bool) -> core::result::Result<(), anyhow::Error> {
                             .insert(0, data, 0)
                             .expect("No server details defined!");
                         current_target = Some(agent.identifier.clone());
+                        current_misses = 0;
                         println!("Redirecting to agent {} at {}", agent.stringify(), ipv4_addr);
                         found_agent = true;
+                        replaced = true;
                         break;
                     }
+                }
+                if !replaced {
+                    // No healthy backend at all — clear so SERVERMAP is emptied below.
+                    current_target = None;
+                    current_misses = 0;
                 }
             }
         } else {
